@@ -10,6 +10,7 @@ import { ChatsView } from "./chats-view"
 import { PlaceholderView } from "./placeholder-view"
 import { HomeView } from "./home-view"
 import { ProfileScreen } from "./profile-screen"
+import { VladiChat } from "./vladi-chat" // Imported VladiChat component
 import { useVladiStore, type MoodEntry } from "@/lib/vladi-store"
 import type { QuadrantId } from "@/lib/vladi-data"
 import { supabase } from "@/lib/supabase/client"
@@ -30,12 +31,19 @@ interface VladiAppProps {
 
 export default function VladiApp({ userId, userProfile }: VladiAppProps) {
   const [activeTab, setActiveTab] = useState("record")
-  const [currentScreen, setCurrentScreen] = useState<"main" | "emotion" | "context" | "mirror">("main")
+  const [currentScreen, setCurrentScreen] = useState<"main" | "emotion" | "context" | "mirror" | "vladi-chat">("main")
   const [selectedQuadrant, setSelectedQuadrant] = useState<QuadrantId>("green")
   const [emotionData, setEmotionData] = useState<EmotionData | null>(null)
   const [contextData, setContextData] = useState<{ text: string; tags: string[] } | null>(null)
   const [showProfile, setShowProfile] = useState(false)
   const [notificationCount, setNotificationCount] = useState(0)
+  const [vladiChatContext, setVladiChatContext] = useState<{
+    emotion: string
+    intensity: number
+    wellbeing: number
+    notes?: string
+    contextTags?: string[]
+  } | null>(null)
 
   const { addEntry } = useVladiStore()
 
@@ -182,6 +190,19 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
     setContextData(null)
   }, [])
 
+  const handleStartChatFromMirror = useCallback(() => {
+    if (emotionData && contextData) {
+      setVladiChatContext({
+        emotion: emotionData.emotion,
+        intensity: emotionData.energy,
+        wellbeing: emotionData.pleasantness,
+        notes: contextData.text,
+        contextTags: contextData.tags,
+      })
+    }
+    setCurrentScreen("vladi-chat")
+  }, [emotionData, contextData])
+
   const handleCloseEmotion = useCallback(() => {
     setCurrentScreen("main")
   }, [])
@@ -191,7 +212,11 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
   }, [])
 
   const handleTabChange = useCallback((tab: string) => {
-    if (tab === "record") {
+    if (tab === "home") {
+      setCurrentScreen("main")
+    } else if (tab === "stats") {
+      setCurrentScreen("main")
+    } else if (tab === "record") {
       setCurrentScreen("main")
     } else if (tab === "perfil") {
       setShowProfile(true)
@@ -230,6 +255,18 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
     }
   }, [userId])
 
+  const handleStartChatFromIEQ = useCallback(() => {
+    setVladiChatContext(null)
+    setCurrentScreen("vladi-chat")
+  }, [])
+
+  const handleCloseVladiChat = useCallback(() => {
+    setCurrentScreen("main")
+    setVladiChatContext(null)
+    setEmotionData(null)
+    setContextData(null)
+  }, [])
+
   const profileForViews = userProfile
     ? {
         username: userProfile.username,
@@ -256,6 +293,7 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
             userProfile={profileForViews}
             onAvatarClick={handleOpenProfile}
             onNotificationsClick={handleOpenProfile}
+            onStartChat={handleStartChatFromIEQ}
           />
         )
       case "record":
@@ -324,7 +362,12 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
           contextText={contextData.text}
           contextTags={contextData.tags}
           onClose={handleCloseMirror}
+          onStartChat={handleStartChatFromMirror}
         />
+      )}
+
+      {currentScreen === "vladi-chat" && (
+        <VladiChat userId={userId} onClose={handleCloseVladiChat} emotionalContext={vladiChatContext || undefined} />
       )}
 
       {showProfile && <ProfileScreen userProfile={userProfile} onClose={handleCloseProfile} />}

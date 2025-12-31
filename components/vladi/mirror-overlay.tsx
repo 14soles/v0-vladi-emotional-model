@@ -1,55 +1,117 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { X, Brain, Play } from "lucide-react"
+import { X, Brain, Play, MessageCircle } from "lucide-react"
 import type { EmotionData } from "./emotion-screen"
 
 interface MirrorOverlayProps {
   emotionData: EmotionData
   contextText: string
   contextTags: string[]
+  bodySignals?: string[]
+  timeReference?: string
+  certainty?: string
   onClose: () => void
+  onStartChat?: () => void
+}
+
+interface ActivitySuggestion {
+  title: string
+  type: string
+  time: string
 }
 
 interface MirrorResult {
   text: string
-  suggestion?: {
-    title: string
-    type: string
-    time: string
-  }
+  suggestion?: ActivitySuggestion
 }
 
-export function MirrorOverlay({ emotionData, contextText, contextTags, onClose }: MirrorOverlayProps) {
+export function MirrorOverlay({
+  emotionData,
+  contextText,
+  contextTags,
+  bodySignals,
+  timeReference,
+  certainty,
+  onClose,
+  onStartChat,
+}: MirrorOverlayProps) {
   const [loading, setLoading] = useState(true)
   const [result, setResult] = useState<MirrorResult | null>(null)
 
   useEffect(() => {
     const generateMirror = async () => {
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-
-      let text = ""
-      let suggestion = { title: "Pausa consciente", type: "Relax", time: "2 min" }
-
-      if (emotionData.valence === 1) {
-        text = `Es genial que te sientas ${emotionData.emotion.toLowerCase()}. Aprovecha esta energía positiva para hacer algo que te importa.`
-        suggestion = { title: "Gratitud", type: "Reflexión", time: "3 min" }
-      } else if (emotionData.valence === -1) {
-        if (emotionData.quadrant === "red") {
-          text = `Entiendo que te sientes ${emotionData.emotion.toLowerCase()}. Tu cuerpo está en alerta. Una pausa de respiración puede ayudarte a recuperar el control.`
-          suggestion = { title: "Respiración 4-7-8", type: "Calma", time: "4 min" }
-        } else {
-          text = `Gracias por compartir que te sientes ${emotionData.emotion.toLowerCase()}. Estos momentos también pasan. ¿Qué pequeña cosa podrías hacer por ti ahora?`
-          suggestion = { title: "Grounding 5-4-3-2-1", type: "Presente", time: "5 min" }
+      try {
+        const emotionFamilyMap: Record<string, string> = {
+          green: "en calma",
+          yellow: "con energía",
+          red: "en tensión",
+          blue: "sin ánimo",
         }
-      }
 
-      setResult({ text, suggestion })
-      setLoading(false)
+        const activityTags = contextTags.filter(
+          (t) => !t.startsWith("Compañía:") && !t.startsWith("Actividad:") && !t.startsWith("Con:"),
+        )
+        const companyTags = contextTags.filter((t) => t.startsWith("Con:")).map((t) => t.replace("Con:", "").trim())
+
+        const [mirrorResponse, suggestionResponse] = await Promise.all([
+          fetch("/api/ai/emotional-mirror", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              emotion: emotionData.emotion,
+              intensity: emotionData.energy,
+              wellbeing: emotionData.pleasantness,
+              context: {
+                notes: contextText,
+                activityTags,
+                companyTags,
+                bodyLocation: bodySignals?.join(", "),
+                whenOccurred: timeReference,
+                certaintyBucket: certainty,
+              },
+            }),
+          }),
+          fetch("/api/ai/activity-suggestion", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              emotion: emotionData.emotion,
+              intensity: emotionData.energy,
+              wellbeing: emotionData.pleasantness,
+              emotionFamily: emotionFamilyMap[emotionData.quadrant] || "desconocido",
+            }),
+          }),
+        ])
+
+        const mirrorData = await mirrorResponse.json()
+        const suggestionData = await suggestionResponse.json()
+
+        setResult({
+          text: mirrorData.text,
+          suggestion: {
+            title: suggestionData.text,
+            type: "DEAM EQ",
+            time: "5-10 min",
+          },
+        })
+      } catch (error) {
+        console.error("[v0] Error generating mirror:", error)
+        setResult({
+          text: "Gracias por compartir tus emociones. Tu registro me ayuda a comprenderte mejor.",
+          suggestion: {
+            title: "Tómate un momento para reflexionar",
+            type: "DEAM EQ",
+            time: "5 min",
+          },
+        })
+      } finally {
+        setLoading(false)
+      }
     }
 
     generateMirror()
-  }, [emotionData])
+  }, [emotionData, contextText, contextTags, bodySignals, timeReference, certainty])
 
   return (
     <div
@@ -84,13 +146,13 @@ export function MirrorOverlay({ emotionData, contextText, contextTags, onClose }
             ¡Gracias por compartir tus emociones!
           </h2>
 
-          <p className="text-sm sm:text-base text-gray-600 leading-relaxed mb-6 sm:mb-10 px-2">{result?.text}</p>
+          <p className="text-sm sm:text-base text-gray-600 leading-relaxed mb-6 sm:mb-8 px-2">{result?.text}</p>
 
           {result?.suggestion && (
-            <button className="bg-gray-100 border border-gray-200 rounded-full py-3 px-5 w-full max-w-xs flex items-center justify-between mb-6 sm:mb-8 hover:bg-gray-200 transition-colors active:scale-[0.98] touch-manipulation">
+            <button className="bg-gray-100 border border-gray-200 rounded-full py-3 px-5 w-full max-w-xs flex items-center justify-between mb-4 hover:bg-gray-200 transition-colors active:scale-[0.98] touch-manipulation">
               <div className="flex flex-col items-start text-left">
                 <span className="text-[9px] sm:text-[10px] uppercase text-gray-500 font-semibold tracking-wider mb-0.5">
-                  Sugerencia - DEAM EQ
+                  Sugerencia - {result.suggestion.type}
                 </span>
                 <div className="flex items-center gap-2 font-bold text-gray-900 text-sm sm:text-base">
                   <Play className="w-4 h-4" />
@@ -98,6 +160,16 @@ export function MirrorOverlay({ emotionData, contextText, contextTags, onClose }
                 </div>
               </div>
               <span className="text-xs sm:text-sm text-gray-500">{result.suggestion.time}</span>
+            </button>
+          )}
+
+          {onStartChat && (
+            <button
+              onClick={onStartChat}
+              className="bg-black text-white rounded-full py-3 px-6 w-full max-w-xs flex items-center justify-center gap-2 mb-6 sm:mb-8 hover:bg-gray-800 transition-colors active:scale-[0.98] touch-manipulation font-medium"
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span>Iniciar Chat con Vladi</span>
             </button>
           )}
 

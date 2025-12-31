@@ -19,10 +19,11 @@ interface GranularityData {
 
 interface GranularityBlockProps {
   data: GranularityData
+  aiInsight?: string // Added AI insight prop
   onInfoClick?: () => void
 }
 
-export function GranularityBlock({ data, onInfoClick }: GranularityBlockProps) {
+export function GranularityBlock({ data, aiInsight, onInfoClick }: GranularityBlockProps) {
   const [selectedView, setSelectedView] = useState<"top" | "new">("top")
   const [showDropdown, setShowDropdown] = useState(false)
 
@@ -64,7 +65,8 @@ export function GranularityBlock({ data, onInfoClick }: GranularityBlockProps) {
 
       {/* Description */}
       <p className="text-xs text-gray-400 italic mb-6 leading-relaxed">
-        Cada vez identificas mejor lo que sientes. Eso te da más adaptación y mejor regulación emocional.
+        {aiInsight ||
+          "Cada vez identificas mejor lo que sientes. Eso te da más adaptación y mejor regulación emocional."}
       </p>
 
       {/* Dropdown Selector */}

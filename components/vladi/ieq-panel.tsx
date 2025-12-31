@@ -1,12 +1,14 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Info, ChevronDown, TrendingUp, TrendingDown } from "lucide-react"
 import { useIEQData } from "@/lib/hooks/use-ieq-data"
 import { usePeriodSelector, type TimePeriod } from "@/lib/hooks/use-period-selector"
 import { IntensityWellbeingWaveGraph } from "./intensity-wellbeing-wave-graph"
 import { GranularityBlock } from "./granularity-block"
 import { EmotionalAwarenessBlock } from "./emotional-awareness-block"
+import { EmotionalSummaryBlock } from "./emotional-summary-block"
+import { ConversationHistoryBlock } from "./conversation-history-block"
 
 interface IEQPanelProps {
   userId?: string
@@ -17,9 +19,10 @@ interface IEQPanelProps {
   }
   onAvatarClick?: () => void
   onNotificationsClick?: () => void
+  onStartChat?: () => void
 }
 
-export function IEQPanel({ userId }: IEQPanelProps) {
+export function IEQPanel({ userId, onStartChat }: IEQPanelProps) {
   const { period, showPeriodMenu, getPeriodLabel, formatDateRange, toggleMenu, selectPeriod } = usePeriodSelector("7d")
 
   const {
@@ -40,6 +43,78 @@ export function IEQPanel({ userId }: IEQPanelProps) {
   } = useIEQData(userId, period)
 
   const [showInfoModal, setShowInfoModal] = useState<string | null>(null)
+  const [aiInsights, setAiInsights] = useState<{
+    emotionalState: string
+    intensityWellbeing: string
+    granularity: string
+    emotionalAwareness: string
+    emotionalSummary: string
+  } | null>(null)
+  const [loadingInsights, setLoadingInsights] = useState(false)
+
+  useEffect(() => {
+    async function fetchAIInsights() {
+      if (!currentEntries || currentEntries.length === 0) {
+        console.log("[v0] IEQ Panel - Skipping AI insights, no entries")
+        return
+      }
+
+      console.log("[v0] IEQ Panel - Fetching AI insights with data:", {
+        emotionalState,
+        deamScore,
+        checkIns: currentEntries.length,
+        granularityScore: granularityData.score,
+      })
+
+      setLoadingInsights(true)
+      try {
+        const response = await fetch("/api/ai/ieq-insights", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            emotionalState,
+            deamScore,
+            deamTrend,
+            checkIns: currentEntries.length,
+            averageIntensity,
+            averageWellbeing,
+            granularityScore: granularityData.score,
+            granularityTrend: granularityData.deltaPercent,
+            emotionalAwareness: {
+              ceScore: emotionalAwarenessData.ceScore,
+              subscores: emotionalAwarenessData.subscores,
+            },
+            period: getPeriodLabel(),
+            topEmotions: granularityData.topEmotions,
+          }),
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          console.log("[v0] IEQ Panel - Received AI insights:", data.insights)
+          setAiInsights(data.insights)
+        } else {
+          console.error("[v0] IEQ Panel - Failed to fetch insights:", response.status, response.statusText)
+        }
+      } catch (error) {
+        console.error("[v0] IEQ Panel - Error fetching AI insights:", error)
+      } finally {
+        setLoadingInsights(false)
+      }
+    }
+
+    fetchAIInsights()
+  }, [
+    emotionalState,
+    deamScore,
+    deamTrend,
+    currentEntries,
+    averageIntensity,
+    averageWellbeing,
+    granularityData,
+    emotionalAwarenessData,
+    period,
+  ])
 
   const getEmotionalStateImage = (category: string) => {
     const categoryLower = category.toLowerCase()
@@ -83,6 +158,10 @@ export function IEQPanel({ userId }: IEQPanelProps) {
     "intensidad-bienestar": {
       title: "Intensidad y bienestar",
       text: "Este gráfico muestra la distribución de tus emociones según su intensidad (energía) y bienestar. Cada color representa una familia emocional diferente, ayudándote a visualizar tus patrones emocionales.",
+    },
+    "resumen-emocional": {
+      title: "Tu resumen emocional",
+      text: "Este resumen integra todos tus datos del periodo para darte una visión general de tu situación emocional. Valida tus emociones y te ayuda a comprenderte mejor, destacando progresos y áreas de crecimiento en tu inteligencia emocional.",
     },
   }
 
@@ -148,6 +227,16 @@ export function IEQPanel({ userId }: IEQPanelProps) {
           </div>
         </div>
 
+        {/* Emotional Summary Block */}
+        {currentEntries.length > 0 && (
+          <EmotionalSummaryBlock
+            aiSummary={aiInsights?.emotionalSummary}
+            loading={loadingInsights}
+            onInfoClick={() => setShowInfoModal("resumen-emocional")}
+            onChatClick={onStartChat}
+          />
+        )}
+
         {/* Content */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left Column: Estado Emocional */}
@@ -162,7 +251,9 @@ export function IEQPanel({ userId }: IEQPanelProps) {
               </button>
             </div>
             <p className="text-xs text-gray-400 italic text-center mb-4 leading-relaxed">
-              {emotionalState?.description || "Aún no hay suficientes registros."}
+              {loadingInsights
+                ? "Analizando..."
+                : aiInsights?.emotionalState || emotionalState?.description || "Aún no hay suficientes registros."}
             </p>
 
             <div className="flex items-center justify-center mb-2">
@@ -274,6 +365,7 @@ export function IEQPanel({ userId }: IEQPanelProps) {
               emotions={emotionPoints}
               averageIntensity={averageIntensity}
               averageWellbeing={averageWellbeing}
+              aiInsight={loadingInsights ? "Analizando tus patrones..." : aiInsights?.intensityWellbeing}
               onEmotionClick={(emotion) => {
                 // Emotion clicked
               }}
@@ -284,14 +376,21 @@ export function IEQPanel({ userId }: IEQPanelProps) {
         {/* Granularidad - Full width */}
         {currentEntries.length > 0 && (
           <div className="w-full">
-            <GranularityBlock data={granularityData} onInfoClick={() => setShowInfoModal("granularidad")} />
+            <GranularityBlock
+              data={granularityData}
+              aiInsight={loadingInsights ? "Analizando..." : aiInsights?.granularity}
+              onInfoClick={() => setShowInfoModal("granularidad")}
+            />
           </div>
         )}
 
         {/* Conciencia emocional - Full width */}
         {emotionalAwarenessData && emotionalAwarenessData.nCheckins > 0 && (
           <div className="w-full">
-            <EmotionalAwarenessBlock data={emotionalAwarenessData} />
+            <EmotionalAwarenessBlock
+              data={emotionalAwarenessData}
+              aiInsight={loadingInsights ? "Analizando..." : aiInsights?.emotionalAwareness}
+            />
           </div>
         )}
 
@@ -327,6 +426,16 @@ export function IEQPanel({ userId }: IEQPanelProps) {
               {inertia > 0 ? `${Math.floor(inertia)}h ${Math.round((inertia % 1) * 60)}min` : "N/A"}
             </p>
           </div>
+        </div>
+
+        <div className="w-full">
+          <ConversationHistoryBlock
+            userId={userId}
+            onConversationClick={(sessionId) => {
+              console.log("[v0] Opening conversation:", sessionId)
+              // TODO: Implement conversation reopening
+            }}
+          />
         </div>
       </div>
 

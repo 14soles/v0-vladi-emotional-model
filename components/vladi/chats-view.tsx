@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react"
 import { Pin, ArrowUp, MoreHorizontal, MoreVertical, Check, CheckCheck, ArrowLeft } from "lucide-react"
 import { useVladiStore } from "@/lib/vladi-store"
 import { GroupsPeopleScreen } from "./groups-people-screen"
+import { VladiChat } from "./vladi-chat"
 
 interface ChatsViewProps {
   userId?: string
@@ -127,6 +128,7 @@ export function ChatsView({
   const [activeMenu, setActiveMenu] = useState<string | null>(null)
   const [activeFilter, setActiveFilter] = useState("Todos")
   const [showGroupsScreen, setShowGroupsScreen] = useState(false)
+  const [showVladiChat, setShowVladiChat] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { chatHistory, addChatMessage, entries } = useVladiStore()
@@ -168,7 +170,12 @@ export function ChatsView({
 
   const handleOpenChat = (chatId: string) => {
     setChats((prev) => prev.map((chat) => (chat.id === chatId ? { ...chat, isRead: true, unreadCount: 0 } : chat)))
-    setSelectedChat(chatId)
+
+    if (chatId === "vladi") {
+      setShowVladiChat(true)
+    } else {
+      setSelectedChat(chatId)
+    }
   }
 
   const handleSendMessage = async () => {
@@ -247,6 +254,10 @@ export function ChatsView({
   })
 
   const currentChat = chats.find((c) => c.id === selectedChat)
+
+  if (showVladiChat) {
+    return <VladiChat onClose={() => setShowVladiChat(false)} />
+  }
 
   if (showGroupsScreen) {
     return <GroupsPeopleScreen onClose={() => setShowGroupsScreen(false)} userId={userId} />

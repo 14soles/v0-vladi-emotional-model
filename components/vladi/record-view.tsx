@@ -120,18 +120,18 @@ export function RecordView({
         </div>
       </header>
 
-      <div className="w-full max-w-md text-center mt-6 mb-4 px-6 shrink-0">
+      <div className="w-full max-w-md text-center mt-2 sm:mt-4 mb-3 sm:mb-4 px-6 shrink-0">
         <p className="text-base text-gray-600 mb-2">
           <span className="font-light">Hola, </span>
           <span className="font-semibold">{userName}</span>
         </p>
-        <h2 className="text-3xl font-light mb-3 text-gray-900">¿Cómo estás?</h2>
+        <h2 className="text-3xl font-light mb-2 sm:mb-3 text-gray-900">¿Cómo estás?</h2>
         <p className="text-sm text-gray-400 font-light">{dateStr}</p>
       </div>
 
-      <div className="flex-1 flex items-center justify-center w-full px-6 min-h-0">
+      <div className="flex-1 flex items-center justify-center w-full px-6 sm:px-8 min-h-0 py-4">
         <div
-          className="relative aspect-square w-full max-w-[420px] rounded-full cursor-pointer touch-none select-none overflow-hidden"
+          className="relative aspect-square w-full max-w-[280px] sm:max-w-[340px] md:max-w-[420px] rounded-full cursor-pointer touch-none select-none overflow-hidden"
           onMouseDown={handlePressStart}
           onMouseUp={handlePressEnd}
           onMouseLeave={handlePressCancel}
@@ -156,7 +156,7 @@ export function RecordView({
 
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
             <span
-              className={`text-white text-3xl sm:text-4xl md:text-5xl font-light tracking-wide transition-opacity duration-100 ${isExpanding ? "opacity-0" : "opacity-100"}`}
+              className={`text-white text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-light tracking-wide transition-opacity duration-100 ${isExpanding ? "opacity-0" : "opacity-100"}`}
             >
               {currentState.text}
             </span>
@@ -164,7 +164,7 @@ export function RecordView({
         </div>
       </div>
 
-      <p className="text-gray-500 font-light px-8 text-center text-sm py-6 pb-safe shrink-0">
+      <p className="text-gray-500 font-light px-8 text-center text-sm py-4 sm:py-6 pb-safe shrink-0">
         Toca el círculo en la pantalla
         <br />
         Mantén pulsado para continuar

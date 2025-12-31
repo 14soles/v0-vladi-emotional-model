@@ -21,9 +21,10 @@ interface EmotionalAwarenessData {
 
 interface EmotionalAwarenessBlockProps {
   data: EmotionalAwarenessData
+  aiInsight?: string // Added AI insight prop
 }
 
-export function EmotionalAwarenessBlock({ data }: EmotionalAwarenessBlockProps) {
+export function EmotionalAwarenessBlock({ data, aiInsight }: EmotionalAwarenessBlockProps) {
   const formatTrend = () => {
     const absPoints = Math.abs(data.deltaPoints)
     if (data.trend === "up") return `↗ +${absPoints} vs antes`
@@ -60,7 +61,7 @@ export function EmotionalAwarenessBlock({ data }: EmotionalAwarenessBlockProps) 
       </div>
 
       {/* Interpretation text */}
-      <p className="text-[10px] text-gray-400 italic mb-6 leading-[14px]">{data.interpretationText}</p>
+      <p className="text-[10px] text-gray-400 italic mb-6 leading-[14px]">{aiInsight || data.interpretationText}</p>
 
       {/* Main content */}
       <div className="flex flex-col sm:flex-row items-start justify-between gap-6">

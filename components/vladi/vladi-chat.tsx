@@ -211,24 +211,26 @@ export function VladiChat({ userId, userName = "Usuario", onClose, emotionalCont
         className="px-6 py-4 bg-white shrink-0"
         style={{
           paddingBottom: "max(16px, calc(env(safe-area-inset-bottom) + 8px))",
-          boxShadow: "0px -4px 22.3px 0px rgba(0, 0, 0, 0.11)",
         }}
       >
         <form onSubmit={handleSend}>
-          <div className="bg-white border-2 border-gray-200 rounded-full py-3 pr-3 pl-5 flex items-center shadow-sm">
+          <div className="bg-white border-2 border-gray-200 rounded-full py-3 pr-3 pl-5 flex items-center">
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Escribe aquí lo que quieras..."
               disabled={status !== "ready"}
-              className="flex-1 bg-transparent border-none outline-none text-base text-gray-900 placeholder:text-gray-400"
+              className="flex-1 bg-transparent border-none outline-none text-xs text-gray-900 placeholder:text-gray-400"
             />
             {input.trim() ? (
               <button
                 type="submit"
                 disabled={status !== "ready"}
                 className="w-11 h-11 bg-gray-900 rounded-full flex items-center justify-center text-white ml-3 active:scale-95 transition-transform disabled:opacity-50"
+                style={{
+                  boxShadow: "0px -4px 22.3px 0px rgba(0, 0, 0, 0.11)",
+                }}
               >
                 <ArrowUp className="w-5 h-5" />
               </button>
@@ -236,6 +238,9 @@ export function VladiChat({ userId, userName = "Usuario", onClose, emotionalCont
               <button
                 type="button"
                 className="w-11 h-11 bg-gray-900 rounded-full flex items-center justify-center text-white ml-3 active:scale-95 transition-transform"
+                style={{
+                  boxShadow: "0px -4px 22.3px 0px rgba(0, 0, 0, 0.11)",
+                }}
               >
                 <Mic className="w-5 h-5" />
               </button>

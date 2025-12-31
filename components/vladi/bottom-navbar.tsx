@@ -19,11 +19,19 @@ export function BottomNavbar({ activeTab, onTabChange, userProfile }: BottomNavb
     { id: "perfil", icon: "perfil", label: "Perfil" },
   ]
 
+  const getUserInitials = () => {
+    if (!userProfile) return "U"
+    const name = userProfile.display_name || userProfile.username || ""
+    return name.charAt(0).toUpperCase()
+  }
+
   return (
     <nav
-      className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-100 flex justify-around items-center z-[90] shrink-0 pb-[env(safe-area-inset-bottom)] pt-3"
+      className="sticky bottom-0 left-0 right-0 bg-white flex justify-around items-center z-[90] shrink-0 pb-[calc(env(safe-area-inset-bottom)+5px)] pt-3"
       style={{ minHeight: "80px" }}
     >
+      <div className="absolute top-0 left-5 right-5 h-px bg-gray-100" />
+
       {tabs.map((tab) => {
         const isActive = activeTab === tab.id
 
@@ -36,8 +44,8 @@ export function BottomNavbar({ activeTab, onTabChange, userProfile }: BottomNavb
             }`}
           >
             {tab.isCenter ? (
-              <div className="w-14 h-14 bg-gray-900 text-white rounded-full flex items-center justify-center shadow-lg -translate-y-4 active:scale-95 transition-transform">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-[51px] h-[51px] bg-gray-900 text-white rounded-full flex items-center justify-center active:scale-95 transition-transform">
+                <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
               </div>
@@ -45,11 +53,11 @@ export function BottomNavbar({ activeTab, onTabChange, userProfile }: BottomNavb
               <>
                 {tab.icon === "casa" &&
                   (isActive ? (
-                    <svg className="w-7 h-7 mb-1" viewBox="0 0 29 29" fill="currentColor">
-                      <path d="M0.0106991 13.8396C0.0106991 13.0599 0.332052 12.3146 0.899006 11.7796L12.5627 0.772029C13.6534 -0.257343 15.3573 -0.257343 16.448 0.772029L28.1117 11.7796C28.6786 12.3146 29 13.0599 29 13.8396L28.9893 26.1679C28.9893 27.732 27.7218 28.9999 26.1583 28.9999H18.1183V21.0703C18.1183 20.1318 17.3578 19.371 16.4197 19.371H12.5696C11.6315 19.371 10.871 20.1318 10.871 21.0703V28.9999H2.83099C1.26748 28.9999 0 27.732 0 26.1679L0.0106991 13.8396Z" />
+                    <svg className="w-[18px] h-[18px] mb-1" viewBox="0 0 29 29" fill="currentColor">
+                      <path d="M12.5627 0.772029C13.6534 -0.257343 15.3573 -0.257343 16.448 0.772029L28.1117 11.7796C28.6786 12.3146 29 13.0599 29 13.8396L28.9893 26.1679C28.9893 27.732 27.7218 28.9999 26.1583 28.9999H18.1183V21.0703C18.1183 20.1318 17.3578 19.371 16.4197 19.371H12.5696C11.6315 19.371 10.871 20.1318 10.871 21.0703V28.9999H2.83099C1.26748 28.9999 0 27.732 0 26.1679L0.0106991 13.8396Z" />
                     </svg>
                   ) : (
-                    <svg className="w-7 h-7 mb-1" viewBox="0 0 29 29" fill="none" stroke="currentColor">
+                    <svg className="w-[18px] h-[18px] mb-1" viewBox="0 0 29 29" fill="none" stroke="currentColor">
                       <path
                         d="M12.9062 1.13574C13.8043 0.288408 15.2065 0.288396 16.1045 1.13574L27.7686 12.1436C28.1769 12.5291 28.4303 13.047 28.4873 13.6006L28.5 13.8398L28.4893 26.167V26.168C28.4892 27.4561 27.4454 28.5 26.1582 28.5H18.6182V21.0703C18.6182 19.856 17.6342 18.8712 16.4199 18.8711H12.5693C11.355 18.8712 10.3711 19.856 10.3711 21.0703V28.9999H2.83105C1.54388 28.9999 0.500031 27.456 0.5 26.168L0.510742 13.8398L0.523438 13.6006C0.572307 13.1259 0.765569 12.6777 1.07715 12.3164L1.24219 12.1436L12.9062 1.13574Z"
                         strokeWidth="1"
@@ -58,13 +66,13 @@ export function BottomNavbar({ activeTab, onTabChange, userProfile }: BottomNavb
                   ))}
                 {tab.icon === "estadistico" &&
                   (isActive ? (
-                    <svg className="w-7 h-7 mb-1" viewBox="0 0 512 512" fill="currentColor">
+                    <svg className="w-[18px] h-[18px] mb-1" viewBox="0 0 512 512" fill="currentColor">
                       <path d="M124.52,239.304H16.696C7.475,239.304,0,246.78,0,256v215.647c0,9.22,7.475,16.696,16.696,16.696H124.52c9.22,0,16.696-7.475,16.696-16.696V256C141.215,246.78,133.74,239.304,124.52,239.304z" />
                       <path d="M309.912,23.658H202.089c-9.22,0-16.696,7.475-16.696,16.696v431.293c0,9.22,7.475,16.696,16.696,16.696h107.824c9.22,0,16.696-7.474,16.696-16.695V40.353C326.608,31.133,319.133,23.658,309.912,23.658z" />
                       <path d="M495.304,131.48H387.481c-9.22,0-16.696,7.475-16.696,16.696v323.47c0,9.22,7.475,16.696,16.696,16.696h107.824c9.22,0,16.696-7.475,16.696-16.696v-323.47C512,138.956,504.525,131.48,495.304,131.48z" />
                     </svg>
                   ) : (
-                    <svg className="w-7 h-7 mb-1" viewBox="0 0 27 27" fill="none" stroke="currentColor">
+                    <svg className="w-[18px] h-[18px] mb-1" viewBox="0 0 27 27" fill="none" stroke="currentColor">
                       <path
                         d="M0.880859 13.02H6.56641C6.83166 13.02 7.04685 13.2351 7.04688 13.5005V24.8726C7.04662 25.1377 6.83156 25.353 6.56641 25.353H0.880859C0.61568 25.353 0.400643 25.1377 0.400391 24.8726V13.5005C0.400391 13.2352 0.615525 13.02 0.880859 13.02Z"
                         strokeWidth="0.8"
@@ -81,33 +89,41 @@ export function BottomNavbar({ activeTab, onTabChange, userProfile }: BottomNavb
                   ))}
                 {tab.icon === "mente-humana" &&
                   (isActive ? (
-                    <svg className="w-7 h-7 mb-1" viewBox="0 0 27 27" fill="currentColor">
-                      <g clipPath="url(#clip0_2886_1784)">
-                        <path d="M26.8981 17.8481L23.9776 11.7274C23.916 8.62516 22.6808 5.71632 20.4837 3.51384C18.2291 1.25347 15.2302 0.00576782 12.0392 0C12.0318 0 12.0252 0 12.0178 0C8.86833 0 5.8874 1.2442 3.62332 3.50416C1.35142 5.77235 0.0546875 8.83733 0.0546875 12.0646V25.9453C0.0546875 26.5279 0.526825 27 1.10938 27H14.0787C14.6611 27 15.1334 26.5279 15.1334 25.9453V23.9424H18.3436C21.0916 23.9424 23.3864 21.9649 23.8814 19.3572H25.9462C26.7208 19.357 27.2316 18.5477 26.8981 17.8481ZM12.0312 3.8595H12.0293H12.0167C8.6679 3.8595 5.77657 5.97093 4.54308 8.89851C4.25119 9.59127 4.75876 10.3627 5.51496 10.3627H18.5504C19.2996 10.3627 19.8103 9.60157 19.5264 8.90861C18.3006 5.91367 15.3732 3.86547 12.0312 3.8595Z" />
+                    <svg className="w-[18px] h-[18px] mb-1" viewBox="0 0 26 26" fill="none">
+                      <g clipPath="url(#clip0_2942_2296)">
                         <path
-                          d="M19 9H4C5.5 6.27273 6.90098 4.00006 12 4C17 3.99994 18.3333 7.63636 19 9Z"
+                          d="M22.92 11.29C22.86 8.27 21.67 5.47 19.57 3.37C17.42 1.2 14.54 0 11.48 0C8.44 0 5.59 1.19 3.42 3.36C1.22 5.56 0 8.48 0 11.56V25.44C0 25.75 0.25 25.99 0.55 25.99H13.52C13.83 25.99 14.07 25.74 14.07 25.44V22.94H17.78C20.24 22.94 22.37 21.18 22.83 18.76L22.91 18.35H25.39C25.58 18.35 25.75 18.26 25.86 18.09C25.96 17.93 25.97 17.73 25.89 17.55L22.92 11.28V11.29Z"
+                          fill="black"
+                        />
+                        <path
+                          d="M11.4784 3.8601H11.4684C8.41845 3.8601 5.66845 5.7201 4.45845 8.5901C4.38845 8.7601 4.39845 8.9501 4.50845 9.1101C4.60845 9.2701 4.77845 9.3601 4.96845 9.3601H18.0084C18.1984 9.3601 18.3684 9.2701 18.4684 9.1101C18.5684 8.9501 18.5884 8.7601 18.5184 8.5901C17.3384 5.7201 14.5784 3.8601 11.4884 3.8501L11.4784 3.8601Z"
                           fill="white"
                         />
                       </g>
+                      <defs>
+                        <clipPath id="clip0_2942_2296">
+                          <rect width="25.95" height="26" fill="white" />
+                        </clipPath>
+                      </defs>
                     </svg>
                   ) : (
-                    <svg className="w-7 h-7 mb-1" viewBox="0 0 25.95 26" fill="none" stroke="currentColor">
-                      <g>
+                    <svg className="w-[18px] h-[18px] mb-1" viewBox="0 0 26 26" fill="none">
+                      <g clipPath="url(#clip0_2941_2292)">
                         <path
-                          d="M11.46,3.86c-3.05,0-5.8,1.86-7.01,4.73-.07.17-.06.36.05.52.1.16.27.25.46.25h13.04c.19,0,.35-.09.46-.25.1-.16.12-.35.05-.52-1.18-2.87-3.94-4.73-7.03-4.74M11.47,4.97c2,0,3.86.91,5.09,2.48l.64.81H5.77l.65-.81c1.26-1.57,3.1-2.47,5.04-2.47h.01Z"
-                          strokeWidth="0.8"
+                          d="M11.4784 3.8601H11.4684C8.41845 3.8601 5.66845 5.7201 4.45845 8.5901C4.38845 8.7601 4.39845 8.9501 4.50845 9.1101C4.60845 9.2701 4.77845 9.3601 4.96845 9.3601H18.0084C18.1984 9.3601 18.3684 9.2701 18.4684 9.1101C18.5684 8.9501 18.5884 8.7601 18.5184 8.5901C17.3384 5.7201 14.5784 3.8601 11.4884 3.8501L11.4784 3.8601ZM5.76845 8.2501L6.41845 7.4401C7.67845 5.8701 9.51845 4.9701 11.4584 4.9701C13.4684 4.9701 15.3284 5.8801 16.5584 7.4501L17.1985 8.2601H5.76845V8.2501Z"
+                          fill="currentColor"
                         />
                         <path
-                          d="M11.46,0c-3.02,0-5.87,1.19-8.04,3.36C1.22,5.56,0,8.47,0,11.56v13.88c0,.31.25.55.55.55h12.97c.31,0,.55-.25.55-.55v-2.5h3.71c2.46,0,4.59-1.76,5.05-4.18l.08-.41h2.48c.19,0,.36-.09.47-.26.1-.16.12-.36.03-.53l-2.97-6.27c-.06-3.02-1.25-5.82-3.35-7.92C17.41,1.2,14.54,0,11.48,0M11.48,1.11c2.76,0,5.36,1.08,7.31,3.04,1.95,1.96,3.03,4.56,3.03,7.32,0,.08.02.16.05.24l2.64,5.54h-2.14c-.31,0-.55.25-.55.55,0,2.22-1.81,4.03-4.03,4.03h-4.26c-.31,0-.55.25-.55.55v2.5H1.11v-13.33c0-2.79,1.10-5.43,3.10-7.42,1.96-1.96,4.54-3.03,7.26-3.03h.02Z"
-                          strokeWidth="0.8"
+                          d="M22.92 11.29C22.86 8.27 21.67 5.47 19.57 3.37C17.42 1.2 14.54 0 11.48 0C8.44 0 5.59 1.19 3.42 3.36C1.22 5.56 0 8.48 0 11.56V25.44C0 25.75 0.25 25.99 0.55 25.99H13.52C13.83 25.99 14.07 25.74 14.07 25.44V22.94H17.78C20.24 22.94 22.37 21.18 22.83 18.76L22.91 18.35H25.39C25.58 18.35 25.75 18.26 25.86 18.09C25.96 17.93 25.97 17.73 25.89 17.55L22.92 11.28V11.29ZM22.37 17.25C22.06 17.25 21.82 17.5 21.82 17.8C21.82 20.02 20.01 21.83 17.79 21.83H13.53C13.22 21.83 12.98 22.08 12.98 22.38V24.88H1.11V11.55C1.11 8.76 2.21 6.12 4.21 4.13C6.17 2.17 8.75 1.1 11.47 1.1C14.25 1.1 16.85 2.18 18.8 4.14C20.75 6.1 21.83 8.7 21.83 11.46C21.83 11.54 21.85 11.62 21.88 11.7L24.52 17.24H22.38L22.37 17.25Z"
+                          fill="currentColor"
                         />
                       </g>
                     </svg>
                   ))}
                 {tab.icon === "perfil" && (
                   <div
-                    className={`w-7 h-7 mb-1 rounded-full flex items-center justify-center text-[10px] font-medium overflow-hidden border-2 ${
-                      isActive ? "bg-gray-900 text-white border-gray-900" : "bg-transparent border-gray-400"
+                    className={`w-[18px] h-[18px] mb-1 bg-black rounded-full flex items-center justify-center text-white text-[6px] font-bold overflow-hidden border ${
+                      isActive ? "border-gray-900" : "border-gray-400"
                     }`}
                   >
                     {userProfile?.avatar_url ? (
@@ -117,9 +133,7 @@ export function BottomNavbar({ activeTab, onTabChange, userProfile }: BottomNavb
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <span className={`text-[8px] font-bold ${isActive ? "text-white" : "text-gray-400"}`}>
-                        {userProfile?.username?.slice(0, 2).toUpperCase() || "U"}
-                      </span>
+                      <span className="text-white text-[6px] font-bold">{getUserInitials()}</span>
                     )}
                   </div>
                 )}

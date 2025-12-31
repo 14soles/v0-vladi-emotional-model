@@ -103,16 +103,14 @@ export function EmotionScreen({ quadrant, onClose, onConfirm }: EmotionScreenPro
       </div>
 
       {/* Instruction text */}
-      {isDragging && (
-        <div
-          className="absolute left-0 right-0 text-center text-white/80 font-light text-base px-10 pointer-events-none"
-          style={{ bottom: "max(50px, env(safe-area-inset-bottom))" }}
-        >
-          Muévete por la pantalla y
-          <br />
-          selecciona una emoción.
-        </div>
-      )}
+      <div
+        className="absolute left-0 right-0 text-center text-white/80 font-light text-base px-10 pointer-events-none"
+        style={{ bottom: "max(50px, env(safe-area-inset-bottom))" }}
+      >
+        Muévete por la pantalla y
+        <br />
+        selecciona una emoción.
+      </div>
 
       {/* Emotion card */}
       {showCard && emotionData && (

@@ -11,6 +11,7 @@ import { PlaceholderView } from "./placeholder-view"
 import { HomeView } from "./home-view"
 import { ProfileScreen } from "./profile-screen"
 import { VladiChat } from "./vladi-chat" // Imported VladiChat component
+import { NotificationsView } from "./notifications-view" // Imported NotificationsView component
 import { useVladiStore, type MoodEntry } from "@/lib/vladi-store"
 import type { QuadrantId } from "@/lib/vladi-data"
 import { supabase } from "@/lib/supabase/client"
@@ -31,7 +32,9 @@ interface VladiAppProps {
 
 export default function VladiApp({ userId, userProfile }: VladiAppProps) {
   const [activeTab, setActiveTab] = useState("record")
-  const [currentScreen, setCurrentScreen] = useState<"main" | "emotion" | "context" | "mirror" | "vladi-chat">("main")
+  const [currentScreen, setCurrentScreen] = useState<
+    "main" | "emotion" | "context" | "mirror" | "vladi-chat" | "notifications"
+  >("main")
   const [selectedQuadrant, setSelectedQuadrant] = useState<QuadrantId>("green")
   const [emotionData, setEmotionData] = useState<EmotionData | null>(null)
   const [contextData, setContextData] = useState<{ text: string; tags: string[] } | null>(null)
@@ -267,6 +270,10 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
     setContextData(null)
   }, [])
 
+  const handleNotificationsClick = useCallback(() => {
+    setCurrentScreen("notifications")
+  }, [])
+
   const profileForViews = userProfile
     ? {
         username: userProfile.username,
@@ -276,6 +283,12 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
     : undefined
 
   const renderMainView = () => {
+    if (currentScreen === "notifications") {
+      return (
+        <NotificationsView onClose={() => setCurrentScreen("main")} userId={userId} userProfile={profileForViews} />
+      )
+    }
+
     switch (activeTab) {
       case "home":
         return (
@@ -283,7 +296,7 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
             userId={userId}
             userProfile={profileForViews}
             onAvatarClick={handleOpenProfile}
-            onNotificationsClick={handleOpenProfile}
+            onNotificationsClick={handleNotificationsClick}
           />
         )
       case "stats":
@@ -292,7 +305,7 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
             userId={userId}
             userProfile={profileForViews}
             onAvatarClick={handleOpenProfile}
-            onNotificationsClick={handleOpenProfile}
+            onNotificationsClick={handleNotificationsClick}
             onStartChat={handleStartChatFromIEQ}
           />
         )
@@ -303,7 +316,7 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
             userName={userName}
             userProfile={userProfile}
             onAvatarClick={handleOpenProfile}
-            onNotificationsClick={handleOpenProfile}
+            onNotificationsClick={handleNotificationsClick}
             notificationCount={notificationCount}
           />
         )
@@ -315,7 +328,7 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
             userId={userId}
             userProfile={profileForViews}
             onAvatarClick={handleOpenProfile}
-            onNotificationsClick={handleOpenProfile}
+            onNotificationsClick={handleNotificationsClick}
             notificationCount={notificationCount}
           />
         )
@@ -328,7 +341,7 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
             userName={userName}
             userProfile={userProfile}
             onAvatarClick={handleOpenProfile}
-            onNotificationsClick={handleOpenProfile}
+            onNotificationsClick={handleNotificationsClick}
             notificationCount={notificationCount}
           />
         )
@@ -367,7 +380,12 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
       )}
 
       {currentScreen === "vladi-chat" && (
-        <VladiChat userId={userId} onClose={handleCloseVladiChat} emotionalContext={vladiChatContext || undefined} />
+        <VladiChat
+          userId={userId}
+          userName={userName}
+          onClose={handleCloseVladiChat}
+          emotionalContext={vladiChatContext || undefined}
+        />
       )}
 
       {showProfile && <ProfileScreen userProfile={userProfile} onClose={handleCloseProfile} />}

@@ -63,9 +63,11 @@ export default function LandingPage() {
         <Button
           asChild
           variant="outline"
-          className="w-full h-16 rounded-full bg-transparent border-2 border-white hover:bg-white/10 text-white text-lg font-normal shadow-none active:scale-[0.98] transition-transform"
+          className="w-full h-16 rounded-full bg-transparent border-2 border-white hover:bg-white/10 text-white hover:text-white text-lg font-normal shadow-none active:scale-[0.98] transition-transform"
         >
-          <Link href="/auth/sign-up">Registrarse</Link>
+          <Link href="/auth/sign-up" className="text-white">
+            Registrarse
+          </Link>
         </Button>
       </div>
 

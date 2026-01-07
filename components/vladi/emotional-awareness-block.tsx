@@ -64,31 +64,31 @@ export function EmotionalAwarenessBlock({ data, aiInsight }: EmotionalAwarenessB
       <p className="text-[10px] text-gray-400 italic mb-6 leading-[14px]">{aiInsight || data.interpretationText}</p>
 
       {/* Main content */}
-      <div className="flex flex-col sm:flex-row items-start justify-between gap-6">
+      <div className="flex items-center justify-between gap-8">
         {/* Subscores */}
-        <div className="flex flex-col gap-3 flex-shrink-0 w-full sm:w-auto">
-          <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col gap-3 flex-shrink-0">
+          <div className="flex items-center gap-3">
             <span className="text-xs text-gray-600 italic leading-[16px] font-normal">Contexto</span>
             <span className="text-xs font-medium text-gray-900 bg-gray-100 px-3 py-1.5 rounded-full leading-[16px] min-w-[44px] text-center">
               {data.subscores.CC}
             </span>
           </div>
 
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
             <span className="text-xs text-gray-600 italic leading-[16px] font-normal">Cuerpo</span>
             <span className="text-xs font-medium text-gray-900 bg-gray-100 px-3 py-1.5 rounded-full leading-[16px] min-w-[44px] text-center">
               {data.subscores.CB}
             </span>
           </div>
 
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
             <span className="text-xs text-gray-600 italic leading-[16px] font-normal">Tiempo</span>
             <span className="text-xs font-medium text-gray-900 bg-gray-100 px-3 py-1.5 rounded-full leading-[16px] min-w-[44px] text-center">
               {data.subscores.CT}
             </span>
           </div>
 
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
             <span className="text-xs text-gray-600 italic leading-[16px] font-normal">Seguridad</span>
             <span className="text-xs font-medium text-gray-900 bg-gray-100 px-3 py-1.5 rounded-full leading-[16px] min-w-[44px] text-center">
               {data.subscores.MC}
@@ -97,10 +97,10 @@ export function EmotionalAwarenessBlock({ data, aiInsight }: EmotionalAwarenessB
         </div>
 
         {/* Total score and trend */}
-        <div className="flex flex-col items-end justify-center flex-shrink-0 w-full sm:w-auto">
+        <div className="flex flex-col items-center justify-center flex-shrink-0">
           <div className="flex items-baseline gap-1 mb-3">
-            <span className="text-2xl font-bold text-gray-900 leading-[28px]">{data.ceScore}</span>
-            <span className="text-xs text-gray-400 leading-[16px]">/100</span>
+            <span className="text-[64px] font-bold text-gray-900 leading-none">{data.ceScore}</span>
+            <span className="text-sm text-gray-400 leading-[16px]">/100</span>
           </div>
 
           <span

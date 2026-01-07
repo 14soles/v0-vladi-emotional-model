@@ -95,7 +95,7 @@ export function RecordView({
 
   return (
     <div className="flex flex-col items-center flex-1 min-h-0 pt-safe">
-      <header className="w-full max-w-md flex justify-between items-center px-6 py-5 shrink-0">
+      <header className="w-full max-w-md flex justify-between items-center px-6 pt-[10px] pb-2 shrink-0">
         <div className="text-3xl font-light text-gray-900">Vladi</div>
         <div className="flex items-center gap-3">
           <button
@@ -121,16 +121,16 @@ export function RecordView({
         </div>
       </header>
 
-      <div className="w-full max-w-md text-center mt-2 sm:mt-4 mb-3 sm:mb-4 px-6 shrink-0">
+      <div className="w-full max-w-md text-center mt-1 mb-2 px-6 shrink-0">
         <p className="text-base text-gray-600 mb-2">
           <span className="font-light">Hola, </span>
           <span className="font-semibold">{userName}</span>
         </p>
-        <h2 className="text-3xl font-light mb-2 sm:mb-3 text-gray-900">¿Cómo estás?</h2>
+        <h2 className="text-3xl font-light mb-2 text-gray-900">¿Cómo estás?</h2>
         <p className="text-sm text-gray-400 font-light">{dateStr}</p>
       </div>
 
-      <div className="flex-1 flex items-center justify-center w-full px-6 sm:px-8 min-h-0 py-4">
+      <div className="flex-1 flex items-center justify-center w-full px-6 sm:px-8 min-h-0 py-2">
         <div
           className="relative aspect-square w-full max-w-[500px] lg:max-w-[350px] rounded-full cursor-pointer touch-none select-none overflow-hidden"
           onMouseDown={handlePressStart}
@@ -163,7 +163,7 @@ export function RecordView({
         </div>
       </div>
 
-      <p className="text-gray-500 font-light px-8 text-center text-sm py-4 sm:py-6 pb-[calc(1rem+env(safe-area-inset-bottom))] shrink-0 mb-5">
+      <p className="text-gray-500 font-light px-8 text-center text-sm py-2 pb-[calc(1.5rem+env(safe-area-inset-bottom))] shrink-0">
         Toca el círculo en la pantalla
         <br />
         Mantén pulsado para continuar

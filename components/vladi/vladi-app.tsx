@@ -12,6 +12,7 @@ import { HomeView } from "./home-view"
 import { ProfileScreen } from "./profile-screen"
 import { VladiChat } from "./vladi-chat" // Imported VladiChat component
 import { NotificationsView } from "./notifications-view" // Imported NotificationsView component
+import { GroupsPeopleScreen } from "./groups-people-screen" // Imported GroupsPeopleScreen component
 import { useVladiStore, type MoodEntry } from "@/lib/vladi-store"
 import type { QuadrantId } from "@/lib/vladi-data"
 import { supabase } from "@/lib/supabase/client"
@@ -33,7 +34,7 @@ interface VladiAppProps {
 export default function VladiApp({ userId, userProfile }: VladiAppProps) {
   const [activeTab, setActiveTab] = useState("record")
   const [currentScreen, setCurrentScreen] = useState<
-    "main" | "emotion" | "context" | "mirror" | "vladi-chat" | "notifications"
+    "main" | "emotion" | "context" | "mirror" | "vladi-chat" | "notifications" | "personas"
   >("main")
   const [selectedQuadrant, setSelectedQuadrant] = useState<QuadrantId>("green")
   const [emotionData, setEmotionData] = useState<EmotionData | null>(null)
@@ -47,10 +48,15 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
     notes?: string
     contextTags?: string[]
   } | null>(null)
+  const [conversationSummary, setConversationSummary] = useState<string | undefined>(undefined)
 
   const { addEntry } = useVladiStore()
 
   const userName = userProfile?.display_name || userProfile?.username || "Usuario"
+
+  const handleNotificationsClick = useCallback(() => {
+    setCurrentScreen("notifications")
+  }, [])
 
   useEffect(() => {
     if (!userId) return
@@ -227,6 +233,8 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
     } else if (tab === "aprende") {
       // Placeholder for future "Aprende" section
       setCurrentScreen("main")
+    } else if (tab === "personas") {
+      setCurrentScreen("personas")
     }
     setActiveTab(tab)
   }, [])
@@ -258,20 +266,28 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
     }
   }, [userId])
 
-  const handleStartChatFromIEQ = useCallback(() => {
+  const handleOpenGroupsPeople = useCallback(() => {
+    console.log("[v0] VladiApp - Opening Grupos y Personas screen")
+    setCurrentScreen("personas")
+  }, [])
+
+  const handleCloseGroupsPeople = useCallback(() => {
+    console.log("[v0] VladiApp - Closing Grupos y Personas screen")
+    setCurrentScreen("main")
+  }, [])
+
+  const handleStartChatFromIEQ = useCallback((summary?: string) => {
     setVladiChatContext(null)
+    setConversationSummary(summary)
     setCurrentScreen("vladi-chat")
   }, [])
 
   const handleCloseVladiChat = useCallback(() => {
     setCurrentScreen("main")
     setVladiChatContext(null)
+    setConversationSummary(undefined)
     setEmotionData(null)
     setContextData(null)
-  }, [])
-
-  const handleNotificationsClick = useCallback(() => {
-    setCurrentScreen("notifications")
   }, [])
 
   const profileForViews = userProfile
@@ -283,6 +299,10 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
     : undefined
 
   const renderMainView = () => {
+    if (currentScreen === "personas") {
+      return <GroupsPeopleScreen onClose={handleCloseGroupsPeople} userId={userId} />
+    }
+
     if (currentScreen === "notifications") {
       return (
         <NotificationsView onClose={() => setCurrentScreen("main")} userId={userId} userProfile={profileForViews} />
@@ -297,6 +317,7 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
             userProfile={profileForViews}
             onAvatarClick={handleOpenProfile}
             onNotificationsClick={handleNotificationsClick}
+            onPersonasClick={handleOpenGroupsPeople}
           />
         )
       case "stats":
@@ -385,6 +406,7 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
           userName={userName}
           onClose={handleCloseVladiChat}
           emotionalContext={vladiChatContext || undefined}
+          conversationSummary={conversationSummary}
         />
       )}
 

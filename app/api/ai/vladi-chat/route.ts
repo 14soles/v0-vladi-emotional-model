@@ -50,7 +50,7 @@ function classifyMode(message: string): string {
 
 export async function POST(req: Request) {
   try {
-    const { messages, userId, emotionalContext } = await req.json()
+    const { messages, userId, emotionalContext, conversationSummary } = await req.json()
 
     if (!userId) {
       return new Response(JSON.stringify({ error: "Usuario no autenticado" }), {
@@ -83,6 +83,12 @@ export async function POST(req: Request) {
 
     // Building context string with available user data
     let contextString = `\n\nCONTEXTO DEL USUARIO:\n\n`
+
+    if (conversationSummary) {
+      contextString += `RESUMEN DE CONVERSACIÓN ANTERIOR:\n`
+      contextString += `${conversationSummary}\n\n`
+      contextString += `INSTRUCCIÓN: El usuario quiere continuar esta conversación. Reconoce el contexto previo y pregúntale cómo ha evolucionado su situación o cómo se siente ahora respecto a lo que hablaron antes. Sé cálido y muestra que recuerdas de qué hablaron. Máximo 2-3 frases.\n\n`
+    }
 
     if (emotionalContext) {
       contextString += `EMOCIÓN ACTUAL (recién registrada):\n`
@@ -117,7 +123,11 @@ export async function POST(req: Request) {
     contextString += `MODO DE CONVERSACIÓN: ${mode}\n`
 
     if (isInitialGreeting) {
-      contextString += `\nINSTRUCCIÓN ESPECIAL: Este es el inicio de la conversación. Genera un saludo personalizado y natural basándote en los datos del usuario. Menciona algún patrón interesante que hayas notado en sus emociones recientes, o pregunta sobre su emoción actual si acaba de registrarla. Sé cálido y empático, e invita a compartir más. Máximo 2-3 frases.\n`
+      if (conversationSummary) {
+        contextString += `\nINSTRUCCIÓN ESPECIAL: El usuario está continuando una conversación anterior. Reconoce el contexto del resumen y pregunta cómo han evolucionado las cosas desde entonces. Sé cálido y muestra que recuerdas de qué hablaron. Máximo 2-3 frases.\n`
+      } else {
+        contextString += `\nINSTRUCCIÓN ESPECIAL: Este es el inicio de la conversación. Genera un saludo personalizado y natural basándote en los datos del usuario. Menciona algún patrón interesante que hayas notado en sus emociones recientes, o pregunta sobre su emoción actual si acaba de registrarla. Sé cálido y empático, e invita a compartir más. Máximo 2-3 frases.\n`
+      }
     }
 
     const fullSystemPrompt = `${SYSTEM_PROMPT}${contextString}`

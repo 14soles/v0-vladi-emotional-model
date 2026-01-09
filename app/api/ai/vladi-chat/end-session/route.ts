@@ -8,44 +8,127 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId, sessionId, conversationText, sessionStartTime } = await req.json()
+    const { userId, sessionId, messages, sessionStartTime } = await req.json()
 
-    if (!userId || !sessionId || !conversationText) {
+    console.log("[v0] End Session - Received messages count:", messages?.length)
+    console.log("[v0] End Session - First 3 messages:", messages?.slice(0, 3))
+
+    if (!userId || !sessionId || !messages || !Array.isArray(messages)) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    const summaryPrompt = `Eres Vladi, un asistente de inteligencia emocional. Analiza esta conversación y genera un resumen estructurado en formato JSON.
+    const messagesToSave = messages
+      .filter((msg: any) => {
+        const content = typeof msg.content === "string" ? msg.content : msg.content?.text || ""
+        return content !== "__INIT__"
+      })
+      .map((msg: any) => ({
+        user_id: userId,
+        session_id: sessionId,
+        role: msg.role,
+        content: typeof msg.content === "string" ? msg.content : msg.content?.text || "",
+        created_at: msg.createdAt || new Date().toISOString(),
+      }))
 
-Conversación:
+    if (messagesToSave.length > 0) {
+      const { error: messagesError } = await supabase.from("vladi_conversation_messages").insert(messagesToSave)
+
+      if (messagesError) {
+        console.error("[v0] Error saving conversation messages:", messagesError)
+      }
+    }
+
+    const conversationText = messages
+      .filter((msg: any) => {
+        const content = typeof msg.content === "string" ? msg.content : msg.content?.text || ""
+        return content !== "__INIT__"
+      })
+      .map((msg: any) => {
+        const content = typeof msg.content === "string" ? msg.content : msg.content?.text || ""
+        return `${msg.role === "user" ? "Usuario" : "Vladi"}: ${content}`
+      })
+      .join("\n\n")
+
+    console.log("[v0] End Session - Conversation text length:", conversationText.length)
+    console.log("[v0] End Session - Conversation text:", conversationText.substring(0, 500) + "...")
+
+    const summaryPrompt = `Eres Vladi, un asistente de inteligencia emocional. Acabas de terminar una conversación con un usuario y necesitas crear un resumen breve y significativo.
+
+Conversación completa:
 ${conversationText}
 
-Genera un objeto JSON con:
+Tu tarea es generar un resumen conciso en segunda persona (dirigido al usuario) que capture la esencia de lo que se habló.
+
+Requisitos del resumen:
+- Exactamente 2 frases cortas (máximo 150 caracteres en total)
+- En segunda persona: "Te has sentido...", "Hablamos sobre...", "Compartiste que..."
+- Específico sobre el tema/emoción discutida, no genérico
+- Empático y validador, sin juicios
+- NO uses frases genéricas como "compartiste tus emociones" o "hablamos de tu día"
+- Sé concreto sobre QUÉ emoción, QUÉ situación, o QUÉ tema se trató
+
+Ejemplos buenos:
+"Te has sentido cansado porque gastaste energía en tareas que no consideras importantes. Hablamos sobre cómo priorizar mejor tu tiempo y energía."
+"Expresaste frustración por la falta de comunicación en tu equipo. Exploramos formas de abordar conversaciones difíciles con asertividad."
+
+Genera un objeto JSON con SOLO estos campos:
 {
-  "mode": "EMOCIONAL" | "DATOS" | "ACCION" | "REVISION" | "ALERTA",
-  "primary_emotion": "emoción principal detectada",
-  "topic": "tema principal en 5-10 palabras",
-  "key_insights": ["insight 1", "insight 2", "insight 3"],
-  "summary": "Resumen en 2-3 frases de la conversación"
+  "summary": "tu resumen de exactamente 2 frases aquí",
+  "primary_emotion": "emoción principal en español",
+  "topic": "título del tema (máximo 6 palabras)"
 }
 
-Responde SOLO con el JSON, sin texto adicional.`
-
-    const { text: summaryJson } = await generateText({
-      model: "google/gemini-2.5-flash-lite",
-      prompt: summaryPrompt,
-      maxTokens: 500,
-    })
+Responde ÚNICAMENTE con el JSON, sin texto adicional ni explicaciones.`
 
     let summaryData
     try {
-      summaryData = JSON.parse(summaryJson)
-    } catch {
+      const { text: summaryJson } = await generateText({
+        model: "google/gemini-2.5-flash-lite",
+        prompt: summaryPrompt,
+        maxTokens: 400,
+        temperature: 0.7,
+      })
+
+      console.log("[v0] End Session - Raw AI summary response:", summaryJson)
+
+      const parsed = JSON.parse(
+        summaryJson
+          .replace(/```json\n?/g, "")
+          .replace(/```\n?/g, "")
+          .trim(),
+      )
+
+      console.log("[v0] End Session - Parsed summary:", parsed.summary)
+
+      summaryData = {
+        mode: "EMOCIONAL",
+        primary_emotion: parsed.primary_emotion || "mixta",
+        topic: parsed.topic || "Conversación con Vladi",
+        summary: parsed.summary || "Conversación sobre emociones.",
+        key_insights: [parsed.summary || "Conversación guardada"],
+      }
+    } catch (error) {
+      console.error("[v0] Error parsing summary JSON:", error)
+      const userMessages = messages.filter((msg: any) => msg.role === "user")
+      const firstUserMessage =
+        userMessages.length > 0
+          ? typeof userMessages[0].content === "string"
+            ? userMessages[0].content
+            : userMessages[0].content?.text || ""
+          : ""
+
       summaryData = {
         mode: "EMOCIONAL",
         primary_emotion: "mixta",
-        topic: "Conversación sobre emociones",
-        key_insights: ["El usuario compartió sus emociones"],
-        summary: "Conversación sobre el estado emocional del usuario.",
+        topic: "Conversación con Vladi",
+        summary: firstUserMessage
+          ? `Hablamos sobre lo que compartiste: "${firstUserMessage.slice(0, 100)}..."`
+          : "Tuvimos una conversación sobre tu estado emocional actual.",
+        key_insights: [
+          firstUserMessage
+            ? `Hablamos sobre lo que compartiste: "${firstUserMessage.slice(0, 100)}..."`
+            : "Tuvimos una conversación sobre tu estado emocional actual.",
+        ],
       }
     }
 
@@ -53,10 +136,10 @@ Responde SOLO con el JSON, sin texto adicional.`
       user_id: userId,
       session_id: sessionId,
       created_at: sessionStartTime,
-      mode: summaryData.mode || "EMOCIONAL",
-      primary_emotion: summaryData.primary_emotion || null,
-      topic: summaryData.topic || "Conversación general",
-      key_insights: summaryData.key_insights || [],
+      mode: summaryData.mode,
+      primary_emotion: summaryData.primary_emotion,
+      topic: summaryData.topic,
+      key_insights: summaryData.key_insights,
       hypotheses: [],
       used_snapshot: false,
       used_metrics_7d: false,
@@ -68,6 +151,8 @@ Responde SOLO con el JSON, sin texto adicional.`
       console.error("[v0] Error saving session summary:", insertError)
       throw insertError
     }
+
+    console.log("[v0] End Session - Final summary returned to client:", summaryData.summary)
 
     return NextResponse.json({
       success: true,

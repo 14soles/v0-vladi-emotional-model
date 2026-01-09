@@ -9,17 +9,12 @@ import { GranularityBlock } from "./granularity-block"
 import { EmotionalAwarenessBlock } from "./emotional-awareness-block"
 import { EmotionalSummaryBlock } from "./emotional-summary-block"
 import { ConversationHistoryBlock } from "./conversation-history-block"
+import { ContextTriggersBlock } from "./context-triggers-block"
+import { useContextPatterns } from "@/lib/hooks/use-context-patterns"
 
 interface IEQPanelProps {
   userId?: string
-  userProfile?: {
-    username: string
-    display_name?: string | null
-    avatar_url?: string | null
-  }
-  onAvatarClick?: () => void
-  onNotificationsClick?: () => void
-  onStartChat?: () => void
+  onStartChat?: (summary?: string) => void
 }
 
 export function IEQPanel({ userId, onStartChat }: IEQPanelProps) {
@@ -42,6 +37,12 @@ export function IEQPanel({ userId, onStartChat }: IEQPanelProps) {
     error,
   } = useIEQData(userId, period)
 
+  const {
+    patterns: contextPatterns,
+    aiInsight: contextInsight,
+    loading: loadingContextPatterns,
+  } = useContextPatterns(userId || "")
+
   const [showInfoModal, setShowInfoModal] = useState<string | null>(null)
   const [aiInsights, setAiInsights] = useState<{
     emotionalState: string
@@ -49,6 +50,7 @@ export function IEQPanel({ userId, onStartChat }: IEQPanelProps) {
     granularity: string
     emotionalAwareness: string
     emotionalSummary: string
+    contextTriggers?: string
   } | null>(null)
   const [loadingInsights, setLoadingInsights] = useState(false)
 
@@ -128,41 +130,6 @@ export function IEQPanel({ userId, onStartChat }: IEQPanelProps) {
       return "/images/circulo-rojo-movimiento.png"
     }
     return "/images/circulo-verde-movimiento.png"
-  }
-
-  const infoTexts = {
-    "estado-emocional": {
-      title: "Estado emocional reciente",
-      text: "Este bloque resume cómo te has sentido en conjunto durante el periodo seleccionado. No muestra una emoción concreta ni un diagnóstico, sino una tendencia basada en tus registros recientes, dando más peso a los más cercanos en el tiempo.",
-    },
-    "deam-ieq": {
-      title: "DEAM IEQ",
-      text: "DEAM EQ es una estimación de tu inteligencia emocional a lo largo del tiempo. Se calcula combinando cómo registras tus emociones, tu capacidad para diferenciarlas, mantener coherencia con el contexto, adaptarte a cambios y recuperarte de estados intensos. No mide si estás bien o mal, sino tu habilidad emocional global.",
-    },
-    "check-ins": {
-      title: "Check-ins",
-      text: "Este valor muestra cuántas emociones has registrado en el periodo seleccionado. Mantener un registro constante te ayuda a tener mejores insights sobre tu estado emocional.",
-    },
-    inercia: {
-      title: "Inercia emocional",
-      text: "Este valor muestra el tiempo medio que tardan tus emociones intensas en volver a un nivel más regulado. No indica si una emoción es buena o mala, sino cuánto se mantiene activa antes de disminuir.",
-    },
-    "conciencia-emocional": {
-      title: "Conciencia emocional",
-      text: "Este indicador muestra si sueles ubicar lo que sientes en contexto, cuerpo, tiempo y seguridad interna. No mide si estás bien o mal, sino cómo de claro y situado queda lo que registras.",
-    },
-    granularidad: {
-      title: "Granularidad emocional",
-      text: "La granularidad emocional refleja tu capacidad para identificar y diferenciar lo que sientes con precisión. Cuanto más específico es tu lenguaje emocional, mayor suele ser tu capacidad de adaptación y regulación.",
-    },
-    "intensidad-bienestar": {
-      title: "Intensidad y bienestar",
-      text: "Este gráfico muestra la distribución de tus emociones según su intensidad (energía) y bienestar. Cada color representa una familia emocional diferente, ayudándote a visualizar tus patrones emocionales.",
-    },
-    "resumen-emocional": {
-      title: "Tu resumen emocional",
-      text: "Este resumen integra todos tus datos del periodo para darte una visión general de tu situación emocional. Valida tus emociones y te ayuda a comprenderte mejor, destacando progresos y áreas de crecimiento en tu inteligencia emocional.",
-    },
   }
 
   const cardShadowStyle = {
@@ -394,6 +361,18 @@ export function IEQPanel({ userId, onStartChat }: IEQPanelProps) {
           </div>
         )}
 
+        {/* Context Triggers Block */}
+        {currentEntries.length > 0 && (
+          <div className="w-full">
+            <ContextTriggersBlock
+              triggers={contextPatterns}
+              insight={contextInsight}
+              loading={loadingContextPatterns}
+              onInfoClick={() => setShowInfoModal("contextos-triggers")}
+            />
+          </div>
+        )}
+
         {/* Inercia - Full width */}
         <div className="w-full bg-white rounded-3xl p-5 sm:p-6" style={cardShadowStyle}>
           <div className="flex items-center justify-center gap-2 mb-2">
@@ -431,9 +410,14 @@ export function IEQPanel({ userId, onStartChat }: IEQPanelProps) {
         <div className="w-full">
           <ConversationHistoryBlock
             userId={userId}
-            onConversationClick={(sessionId) => {
-              console.log("[v0] Opening conversation:", sessionId)
-              // TODO: Implement conversation reopening
+            onResumeConversation={(sessionId, messages, summary) => {
+              console.log("[v0] Resuming conversation with summary:", summary)
+              if (onStartChat && summary) {
+                // Pass the summary to the chat component
+                onStartChat(summary)
+                // Note: We need to pass the summary through the parent component
+                // This will be handled in the parent that manages VladiChat
+              }
             }}
           />
         </div>
@@ -464,4 +448,43 @@ export function IEQPanel({ userId, onStartChat }: IEQPanelProps) {
       )}
     </div>
   )
+}
+
+const infoTexts = {
+  "estado-emocional": {
+    title: "Estado emocional reciente",
+    text: "Este bloque resume cómo te has sentido en conjunto durante el periodo seleccionado. No muestra una emoción concreta ni un diagnóstico, sino una tendencia basada en tus registros recientes, dando más peso a los más cercanos en el tiempo.",
+  },
+  "deam-ieq": {
+    title: "DEAM IEQ",
+    text: "DEAM EQ es una estimación de tu inteligencia emocional a lo largo del tiempo. Se calcula combinando cómo registras tus emociones, tu capacidad para diferenciarlas, mantener coherencia con el contexto, adaptarte a cambios y recuperarte de estados intensos. No mide si estás bien o mal, sino tu habilidad emocional global.",
+  },
+  "check-ins": {
+    title: "Check-ins",
+    text: "Este valor muestra cuántas emociones has registrado en el periodo seleccionado. Mantener un registro constante te ayuda a tener mejores insights sobre tu estado emocional.",
+  },
+  inercia: {
+    title: "Inercia emocional",
+    text: "Este valor muestra el tiempo medio que tardan tus emociones intensas en volver a un nivel más regulado. No indica si una emoción es buena o mala, sino cuánto se mantiene activa antes de disminuir.",
+  },
+  "conciencia-emocional": {
+    title: "Conciencia emocional",
+    text: "Este indicador muestra si sueles ubicar lo que sientes en contexto, cuerpo, tiempo y seguridad interna. No mide si estás bien o mal, sino cómo de claro y situado queda lo que registras.",
+  },
+  granularidad: {
+    title: "Granularidad emocional",
+    text: "La granularidad emocional refleja tu capacidad para identificar y diferenciar lo que sientes con precisión. Cuanto más específico es tu lenguaje emocional, mayor suele ser tu capacidad de adaptación y regulación.",
+  },
+  "intensidad-bienestar": {
+    title: "Intensidad y bienestar",
+    text: "Este gráfico muestra la distribución de tus emociones según su intensidad (energía) y bienestar. Cada color representa una familia emocional diferente, ayudándote a visualizar tus patrones emocionales.",
+  },
+  "resumen-emocional": {
+    title: "Tu resumen emocional",
+    text: "Este resumen integra todos tus datos del periodo para darte una visión general de tu situación emocional. Valida tus emociones y te ayuda a comprenderte mejor, destacando progresos y áreas de crecimiento en tu inteligencia emocional.",
+  },
+  "contextos-triggers": {
+    title: "Contextos y disparadores emocionales",
+    text: "Este bloque identifica patrones en los contextos que acompañan tus emociones. Usa etiquetas de contexto y algoritmos de correlación para detectar qué factores (sueño, trabajo, interacciones sociales, etc.) aparecen más frecuentemente cuando tu intensidad emocional sube o tu inercia aumenta. No indica causa-efecto directa, sino asociaciones recurrentes que pueden ayudarte a entender mejor tus triggers emocionales.",
+  },
 }

@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useEffect, useState } from "react"
 import { Info, ChevronDown } from "lucide-react"
 import { supabase } from "@/lib/supabase/client"
@@ -24,17 +26,19 @@ interface EmotionEntry {
 
 interface ConversationHistoryBlockProps {
   userId?: string
-  onConversationClick?: (sessionId: string) => void
+  onResumeConversation?: (sessionId: string, messages: any[], summary?: string) => void
 }
 
 type ViewMode = "conversations" | "emotions"
 
-export function ConversationHistoryBlock({ userId, onConversationClick }: ConversationHistoryBlockProps) {
+export function ConversationHistoryBlock({ userId, onResumeConversation }: ConversationHistoryBlockProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("conversations")
   const [showDropdown, setShowDropdown] = useState(false)
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
   const [emotions, setEmotions] = useState<EmotionEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [expandedConversations, setExpandedConversations] = useState<Set<string>>(new Set())
+  const [expandedEmotions, setExpandedEmotions] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     if (!userId) {
@@ -88,6 +92,49 @@ export function ConversationHistoryBlock({ userId, onConversationClick }: Conver
       return conv.key_insights[0]
     }
     return conv.topic || "Conversación sin resumen"
+  }
+
+  const getSummaryText = (conv: ConversationSummary): string => {
+    if (conv.key_insights && conv.key_insights.length > 0) {
+      // Join all insights into one text
+      return conv.key_insights.join(" ")
+    }
+    return conv.topic || "Conversación sin resumen"
+  }
+
+  const toggleExpanded = (convId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setExpandedConversations((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(convId)) {
+        newSet.delete(convId)
+      } else {
+        newSet.add(convId)
+      }
+      return newSet
+    })
+  }
+
+  const toggleEmotionExpanded = (emotionId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setExpandedEmotions((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(emotionId)) {
+        newSet.delete(emotionId)
+      } else {
+        newSet.add(emotionId)
+      }
+      return newSet
+    })
+  }
+
+  const handleResumeConversation = async (sessionId: string, conversationSummary: string) => {
+    try {
+      // Instead of loading old messages, just pass the summary to start a new conversation with context
+      onResumeConversation?.(sessionId, [], conversationSummary)
+    } catch (error) {
+      console.error("[v0] Error resuming conversation:", error)
+    }
   }
 
   const cardShadowStyle = {
@@ -165,20 +212,38 @@ export function ConversationHistoryBlock({ userId, onConversationClick }: Conver
               Aún no has tenido conversaciones con Vladi. Inicia un chat para comenzar.
             </p>
           ) : (
-            conversations.map((conv) => (
-              <button
-                key={conv.id}
-                onClick={() => onConversationClick?.(conv.session_id)}
-                className="w-full bg-gray-50 hover:bg-gray-100 rounded-xl p-4 transition-colors text-left"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-gray-400 italic line-clamp-2 mb-1">{getPreviewText(conv)}</p>
+            conversations.map((conv) => {
+              const summaryText = getSummaryText(conv)
+              const isExpanded = expandedConversations.has(conv.id)
+              const shouldShowReadMore = summaryText.length > 120
+
+              return (
+                <div key={conv.id} className="w-full bg-gray-50 hover:bg-gray-100 rounded-xl p-4 transition-colors">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs text-gray-400 italic ${isExpanded ? "" : "line-clamp-2"} mb-1`}>
+                        {summaryText}
+                      </p>
+                      {shouldShowReadMore && (
+                        <button
+                          onClick={(e) => toggleExpanded(conv.id, e)}
+                          className="text-[10px] text-blue-500 hover:text-blue-600 font-medium mt-1"
+                        >
+                          {isExpanded ? "Leer menos" : "Leer más"}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleResumeConversation(conv.session_id, summaryText)}
+                        className="text-[10px] text-gray-700 hover:text-gray-900 font-medium mt-2 block bg-gray-200 hover:bg-gray-300 px-3 py-1.5 rounded-full transition-colors"
+                      >
+                        Continuar chat con Vladi →
+                      </button>
+                    </div>
+                    <span className="text-[10px] text-gray-400 whitespace-nowrap">{formatDate(conv.created_at)}</span>
                   </div>
-                  <span className="text-[10px] text-gray-400 whitespace-nowrap">{formatDate(conv.created_at)}</span>
                 </div>
-              </button>
-            ))
+              )
+            })
           )
         ) : // Emotions view
         emotions.length === 0 ? (
@@ -186,18 +251,38 @@ export function ConversationHistoryBlock({ userId, onConversationClick }: Conver
             Aún no has registrado emociones. Comienza a registrar tus emociones para verlas aquí.
           </p>
         ) : (
-          emotions.map((emotion) => (
-            <div key={emotion.id} className="w-full bg-gray-50 rounded-xl p-4 text-left">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 mb-1">{emotion.emotion}</p>
-                  {emotion.context && <p className="text-xs text-gray-500 mb-1">Contexto: {emotion.context}</p>}
-                  {emotion.notes && <p className="text-xs text-gray-400 italic line-clamp-2">"{emotion.notes}"</p>}
+          emotions.map((emotion) => {
+            const isEmotionExpanded = expandedEmotions.has(emotion.id)
+            const emotionNotes = emotion.notes || ""
+            const shouldShowEmotionReadMore = emotionNotes.length > 80
+
+            return (
+              <div key={emotion.id} className="w-full bg-gray-50 rounded-xl p-4 text-left">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 mb-1">{emotion.emotion}</p>
+                    {emotion.context && <p className="text-xs text-gray-500 mb-1">Contexto: {emotion.context}</p>}
+                    {emotion.notes && (
+                      <>
+                        <p className={`text-xs text-gray-400 italic ${isEmotionExpanded ? "" : "line-clamp-2"}`}>
+                          "{emotion.notes}"
+                        </p>
+                        {shouldShowEmotionReadMore && (
+                          <button
+                            onClick={(e) => toggleEmotionExpanded(emotion.id, e)}
+                            className="text-[10px] text-blue-500 hover:text-blue-600 font-medium mt-1"
+                          >
+                            {isEmotionExpanded ? "Leer menos" : "Leer más"}
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-gray-400 whitespace-nowrap">{formatDate(emotion.created_at)}</span>
                 </div>
-                <span className="text-[10px] text-gray-400 whitespace-nowrap">{formatDate(emotion.created_at)}</span>
               </div>
-            </div>
-          ))
+            )
+          })
         )}
       </div>
     </div>

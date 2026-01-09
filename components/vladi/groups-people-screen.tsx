@@ -257,7 +257,7 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
           .from("privacy_groups")
           .insert({
             user_id: userId,
-            name: newGroupName,
+            name: newGroupName.trim(),
             is_system: false,
           })
           .select()

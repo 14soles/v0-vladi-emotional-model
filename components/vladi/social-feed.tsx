@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase/client"
 
 interface SocialFeedProps {
   userId?: string
+  filterGroupId?: string // Added filterGroupId prop to filter feed by group
 }
 
 interface FeedEntry {
@@ -57,7 +58,7 @@ const INTERVENTION_NAMES: Record<string, string> = {
   journaling: "Escritura terapéutica",
 }
 
-export function SocialFeed({ userId }: SocialFeedProps) {
+export function SocialFeed({ userId, filterGroupId }: SocialFeedProps) {
   const [entries, setEntries] = useState<FeedEntry[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
@@ -75,21 +76,48 @@ export function SocialFeed({ userId }: SocialFeedProps) {
     }
 
     try {
-      // Get accepted contacts (bidirectional)
-      const { data: contactsData } = await supabase
-        .from("contacts")
-        .select("user_id, contact_user_id")
-        .or(`user_id.eq.${userId},contact_user_id.eq.${userId}`)
-        .eq("friendship_status", "accepted")
-
       const contactIds = new Set<string>()
-      contactsData?.forEach((c) => {
-        if (c.user_id === userId) {
-          contactIds.add(c.contact_user_id)
-        } else {
-          contactIds.add(c.user_id)
+
+      // If filterGroupId is "todos" or undefined, show all contacts
+      if (!filterGroupId || filterGroupId === "todos") {
+        // Get accepted contacts (bidirectional)
+        const { data: contactsData } = await supabase
+          .from("contacts")
+          .select("user_id, contact_user_id")
+          .or(`user_id.eq.${userId},contact_user_id.eq.${userId}`)
+          .eq("friendship_status", "accepted")
+
+        contactsData?.forEach((c) => {
+          if (c.user_id === userId) {
+            contactIds.add(c.contact_user_id)
+          } else {
+            contactIds.add(c.user_id)
+          }
+        })
+      } else {
+        // Filter by specific group
+        // First, get the group members
+        const { data: groupMembers } = await supabase
+          .from("group_members")
+          .select("contact_id")
+          .eq("group_id", filterGroupId)
+
+        if (groupMembers && groupMembers.length > 0) {
+          // Get the contact user IDs from the contact_ids
+          const contactIdsArray = groupMembers.map((m) => m.contact_id)
+          const { data: contacts } = await supabase
+            .from("contacts")
+            .select("contact_user_id")
+            .in("id", contactIdsArray)
+            .eq("user_id", userId)
+
+          contacts?.forEach((c) => {
+            if (c.contact_user_id) {
+              contactIds.add(c.contact_user_id)
+            }
+          })
         }
-      })
+      }
 
       // Include own user to see own posts
       contactIds.add(userId)
@@ -174,7 +202,7 @@ export function SocialFeed({ userId }: SocialFeedProps) {
     } finally {
       setIsLoading(false)
     }
-  }, [userId])
+  }, [userId, filterGroupId])
 
   useEffect(() => {
     loadFeed()

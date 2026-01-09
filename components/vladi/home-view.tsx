@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { ChevronDown } from "lucide-react"
+import { User } from "lucide-react"
 import { SocialFeed } from "./social-feed"
 import { CommonHeader } from "./common-header"
 import { supabase } from "@/lib/supabase/client"
@@ -15,11 +15,18 @@ interface HomeViewProps {
   }
   onAvatarClick?: () => void
   onNotificationsClick?: () => void
+  onPersonasClick?: () => void
 }
 
-export function HomeView({ userId, userProfile, onAvatarClick, onNotificationsClick }: HomeViewProps) {
-  const [filter, setFilter] = useState<"para_ti" | "todos">("para_ti")
-  const [showFilterMenu, setShowFilterMenu] = useState(false)
+interface Group {
+  id: string
+  name: string
+  is_system: boolean
+}
+
+export function HomeView({ userId, userProfile, onAvatarClick, onNotificationsClick, onPersonasClick }: HomeViewProps) {
+  const [selectedGroup, setSelectedGroup] = useState<string>("todos")
+  const [groups, setGroups] = useState<Group[]>([])
   const [notificationCount, setNotificationCount] = useState(0)
 
   const loadNotificationCount = useCallback(async () => {
@@ -37,63 +44,127 @@ export function HomeView({ userId, userProfile, onAvatarClick, onNotificationsCl
     }
   }, [userId])
 
+  const loadGroups = useCallback(async () => {
+    if (!userId) return
+    try {
+      const { data, error } = await supabase
+        .from("privacy_groups")
+        .select("id, name, is_system")
+        .eq("user_id", userId)
+        .eq("is_system", false)
+        .order("name", { ascending: true })
+
+      if (!error && data) {
+        setGroups(data)
+      }
+    } catch (error) {
+      console.error("Error loading groups:", error)
+    }
+  }, [userId])
+
   useEffect(() => {
     loadNotificationCount()
-  }, [loadNotificationCount])
+    loadGroups()
+
+    const channel = supabase
+      .channel("groups_changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "privacy_groups",
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          loadGroups()
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [loadNotificationCount, loadGroups, userId])
 
   return (
-    <div className="flex-1 flex flex-col bg-white">
-      <CommonHeader
-        userProfile={userProfile}
-        onAvatarClick={onAvatarClick}
-        onNotificationsClick={onNotificationsClick}
-        notificationCount={notificationCount}
-      />
-
-      {/* Filter dropdown */}
-      <div className="px-5 pb-3 border-b border-gray-100">
-        <div className="relative inline-block">
-          <button
-            onClick={() => setShowFilterMenu(!showFilterMenu)}
-            className="flex items-center gap-1 text-sm font-medium text-gray-700 hover:text-gray-900 active:scale-95 transition-transform"
-          >
-            {filter === "para_ti" ? "Para ti" : "Todos"}
-            <ChevronDown className="w-4 h-4" />
-          </button>
-
-          {showFilterMenu && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setShowFilterMenu(false)} />
-              <div className="absolute left-0 top-8 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50 min-w-[120px]">
-                <button
-                  onClick={() => {
-                    setFilter("para_ti")
-                    setShowFilterMenu(false)
-                  }}
-                  className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 ${
-                    filter === "para_ti" ? "font-medium text-gray-900" : "text-gray-600"
-                  }`}
-                >
-                  Para ti
-                </button>
-                <button
-                  onClick={() => {
-                    setFilter("todos")
-                    setShowFilterMenu(false)
-                  }}
-                  className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 ${
-                    filter === "todos" ? "font-medium text-gray-900" : "text-gray-600"
-                  }`}
-                >
-                  Todos
-                </button>
-              </div>
-            </>
-          )}
+    <div className="flex-1 overflow-y-auto bg-white min-h-0">
+      <div className="w-full max-w-6xl mx-auto">
+        <div className="sticky top-0 z-20 bg-white">
+          <CommonHeader
+            userProfile={userProfile}
+            onAvatarClick={onAvatarClick}
+            onNotificationsClick={onNotificationsClick}
+            notificationCount={notificationCount}
+          />
         </div>
-      </div>
 
-      <SocialFeed userId={userId} />
+        <div className="sticky top-[60px] z-10 bg-white px-5 pb-3 pt-2 border-b border-gray-100">
+          <div
+            className="flex items-center gap-2 overflow-x-auto"
+            style={{
+              scrollbarWidth: "none",
+              msOverflowStyle: "none",
+              WebkitOverflowScrolling: "touch",
+            }}
+          >
+            <style jsx>{`
+              div::-webkit-scrollbar {
+                display: none;
+              }
+            `}</style>
+
+            <button
+              onClick={() => setSelectedGroup("todos")}
+              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
+                selectedGroup === "todos" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              Todos
+            </button>
+
+            <button
+              onClick={() => setSelectedGroup("solo_yo")}
+              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
+                selectedGroup === "solo_yo" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              Solo yo
+            </button>
+
+            {groups.map((group) => (
+              <button
+                key={group.id}
+                onClick={() => setSelectedGroup(group.id)}
+                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
+                  selectedGroup === group.id ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                {group.name}
+              </button>
+            ))}
+
+            <button
+              onClick={() => {
+                console.log("[v0] Personas button clicked!")
+                if (onPersonasClick) {
+                  console.log("[v0] Calling onPersonasClick")
+                  onPersonasClick()
+                } else {
+                  console.log("[v0] onPersonasClick is not defined!")
+                }
+              }}
+              className="p-2 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors flex-shrink-0 ml-1"
+              aria-label="Configurar grupos"
+              type="button"
+            >
+              <User className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        <SocialFeed userId={userId} filterGroupId={selectedGroup} />
+      </div>
     </div>
   )
 }

@@ -13,6 +13,7 @@ export default function SignUpPage() {
   const [phone, setPhone] = useState("")
   const [countryCode, setCountryCode] = useState("+34")
   const [password, setPassword] = useState("")
+  const [name, setName] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -43,6 +44,15 @@ export default function SignUpPage() {
       setError("La contraseña debe tener al menos 6 caracteres")
       return
     }
+    setError(null)
+    setStep(4)
+  }
+
+  const handleNameStep = async () => {
+    if (!name.trim()) {
+      setError("Por favor introduce tu nombre")
+      return
+    }
 
     setIsLoading(true)
     setError(null)
@@ -57,7 +67,8 @@ export default function SignUpPage() {
           emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${window.location.origin}/app`,
           data: {
             phone: `${countryCode}${phone}`,
-            display_name: email.split("@")[0],
+            display_name: name.trim(),
+            full_name: name.trim(),
           },
         },
       })
@@ -140,12 +151,10 @@ export default function SignUpPage() {
         <h1 className="font-sans text-2xl font-normal text-black mb-8">Crea tu cuenta</h1>
 
         <div className="flex gap-2 mb-8 w-full max-w-xs">
-          {[1, 2, 3].map((s) => (
+          {[1, 2, 3, 4].map((s) => (
             <div
               key={s}
-              className={`flex-1 h-1 rounded-full transition-all ${
-                s < step ? "bg-black" : s === step ? "bg-black" : "bg-gray-200"
-              }`}
+              className={`flex-1 h-1 rounded-full transition-all ${s <= step ? "bg-black" : "bg-gray-200"}`}
             />
           ))}
         </div>
@@ -222,28 +231,51 @@ export default function SignUpPage() {
                   placeholder="Mínimo 6 caracteres"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && !isLoading && handlePasswordStep()}
+                  onKeyDown={(e) => e.key === "Enter" && !isLoading && password.length >= 6 && handlePasswordStep()}
                   className="w-full h-14 px-6 pr-24 text-base rounded-full border border-gray-300 focus:outline-none focus:border-gray-400 placeholder:text-gray-300"
                   autoFocus
                 />
-                {password && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-14 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
-                    >
-                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                    </button>
-                    <button
-                      onClick={handlePasswordStep}
-                      disabled={isLoading}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-black rounded-full flex items-center justify-center active:scale-95 transition-transform disabled:opacity-50"
-                    >
-                      <ArrowRight className="w-5 h-5 text-white" />
-                    </button>
-                  </>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-14 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+                <button
+                  onClick={handlePasswordStep}
+                  disabled={password.length < 6}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-black rounded-full flex items-center justify-center active:scale-95 transition-transform disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <ArrowRight className="w-5 h-5 text-white" />
+                </button>
+              </div>
+              {password.length > 0 && password.length < 6 && (
+                <p className="text-xs text-gray-400 text-center">{6 - password.length} caracteres más</p>
+              )}
+            </>
+          )}
+
+          {step === 4 && (
+            <>
+              <p className="text-center text-base text-black mb-4">Escribe tu nombre</p>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Tu nombre"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && !isLoading && name.trim() && handleNameStep()}
+                  className="w-full h-14 px-6 pr-16 text-base rounded-full border border-gray-300 focus:outline-none focus:border-gray-400 placeholder:text-gray-300"
+                  autoFocus
+                />
+                <button
+                  onClick={handleNameStep}
+                  disabled={isLoading || !name.trim()}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-black rounded-full flex items-center justify-center active:scale-95 transition-transform disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <ArrowRight className="w-5 h-5 text-white" />
+                </button>
               </div>
             </>
           )}

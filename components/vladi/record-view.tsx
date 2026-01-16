@@ -28,6 +28,7 @@ export function RecordView({
   const [currentIndex, setCurrentIndex] = useState(1)
   const [isExpanding, setIsExpanding] = useState(false)
   const [isPressed, setIsPressed] = useState(false)
+  const [imagesPreloaded, setImagesPreloaded] = useState(false)
   const pressTimerRef = useRef<NodeJS.Timeout | null>(null)
   const HOLD_DELAY = 200
 
@@ -40,8 +41,27 @@ export function RecordView({
     blue: "/images/circulo-azul.png",
   }
 
-  const now = new Date()
-  const dateStr = `Hoy, ${now.getDate().toString().padStart(2, "0")} Dic ${now.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}`
+  useEffect(() => {
+    const imageUrls = Object.values(gradientImages)
+    let loadedCount = 0
+
+    imageUrls.forEach((url) => {
+      const img = new Image()
+      img.onload = () => {
+        loadedCount++
+        if (loadedCount === imageUrls.length) {
+          setImagesPreloaded(true)
+        }
+      }
+      img.onerror = () => {
+        loadedCount++
+        if (loadedCount === imageUrls.length) {
+          setImagesPreloaded(true)
+        }
+      }
+      img.src = url
+    })
+  }, [])
 
   const handlePressStart = useCallback(
     (e: React.TouchEvent | React.MouseEvent) => {
@@ -95,6 +115,12 @@ export function RecordView({
 
   return (
     <div className="flex flex-col items-center flex-1 min-h-0 pt-safe">
+      <div className="hidden">
+        {Object.values(gradientImages).map((url) => (
+          <img key={url} src={url || "/placeholder.svg"} alt="" />
+        ))}
+      </div>
+
       <header className="w-full max-w-md flex justify-between items-center px-6 pt-[10px] pb-2 shrink-0">
         <div className="text-3xl font-light text-gray-900">Vladi</div>
         <div className="flex items-center gap-3">
@@ -127,7 +153,9 @@ export function RecordView({
           <span className="font-semibold">{userName}</span>
         </p>
         <h2 className="text-3xl font-light mb-2 text-gray-900">¿Cómo estás?</h2>
-        <p className="text-sm text-gray-400 font-light">{dateStr}</p>
+        <p className="text-sm text-gray-400 font-light">
+          {new Date().toLocaleDateString("es-ES", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+        </p>
       </div>
 
       <div className="flex-1 flex items-center justify-center w-full px-6 sm:px-8 min-h-0 py-2">

@@ -7,6 +7,18 @@ import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { logDev, handleError } from "@/lib/error-handler"
 
+function generateUsername(name: string): string {
+  const cleanName = name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Remove accents
+    .replace(/[^a-z0-9]/g, "") // Keep only alphanumeric
+    .slice(0, 12) // Max 12 chars from name
+
+  const randomNum = Math.floor(Math.random() * 9000) + 1000 // 4 digit random number
+  return `${cleanName}${randomNum}`
+}
+
 export default function SignUpPage() {
   const [step, setStep] = useState(1)
   const [email, setEmail] = useState("")
@@ -60,6 +72,8 @@ export default function SignUpPage() {
     try {
       logDev("Starting user registration", { email })
 
+      const generatedUsername = generateUsername(name.trim())
+
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
@@ -69,6 +83,7 @@ export default function SignUpPage() {
             phone: `${countryCode}${phone}`,
             display_name: name.trim(),
             full_name: name.trim(),
+            username: generatedUsername, // Include generated username in metadata
           },
         },
       })
@@ -79,6 +94,21 @@ export default function SignUpPage() {
 
       if (data.user) {
         logDev("User created successfully")
+
+        const { error: profileError } = await supabase.from("profiles").upsert({
+          id: data.user.id,
+          email: email,
+          phone: `${countryCode}${phone}`,
+          display_name: name.trim(),
+          username: generatedUsername,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+
+        if (profileError) {
+          logDev("Profile creation error", { error: profileError })
+        }
+
         await new Promise((resolve) => setTimeout(resolve, 1000))
         router.push("/app")
       } else {

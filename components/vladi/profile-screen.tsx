@@ -39,22 +39,36 @@ interface ProfileScreenProps {
     avatar_url?: string | null
   } | null
   onClose: () => void
+  onProfileUpdate?: () => void // Callback to refresh profile
 }
 
-export function ProfileScreen({ userProfile, onClose }: ProfileScreenProps) {
+export function ProfileScreen({ userProfile, onClose, onProfileUpdate }: ProfileScreenProps) {
   const router = useRouter()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
+  const [showEditProfile, setShowEditProfile] = useState(false) // Edit profile state
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([])
   const [loadingRequests, setLoadingRequests] = useState(false)
   const [processingRequest, setProcessingRequest] = useState<string | null>(null)
+
+  const [editUsername, setEditUsername] = useState(userProfile?.username || "")
+  const [editDisplayName, setEditDisplayName] = useState(userProfile?.display_name || "")
+  const [editPhone, setEditPhone] = useState(userProfile?.phone || "")
+  const [isSaving, setIsSaving] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
 
   useEffect(() => {
     if (userProfile?.id) {
       loadFriendRequests()
     }
   }, [userProfile?.id])
+
+  useEffect(() => {
+    setEditUsername(userProfile?.username || "")
+    setEditDisplayName(userProfile?.display_name || "")
+    setEditPhone(userProfile?.phone || "")
+  }, [userProfile])
 
   const loadFriendRequests = async () => {
     if (!userProfile?.id) return
@@ -80,7 +94,6 @@ export function ProfileScreen({ userProfile, onClose }: ProfileScreenProps) {
         return
       }
 
-      // Fetch profiles for each request
       const fromUserIds = requests.map((r) => r.from_user_id)
       const { data: profiles } = await supabase
         .from("profiles")
@@ -113,10 +126,8 @@ export function ProfileScreen({ userProfile, onClose }: ProfileScreenProps) {
     setProcessingRequest(request.id)
 
     try {
-      // Actualizar estado de la solicitud
       await supabase.from("friend_requests").update({ status: "accepted" }).eq("id", request.id)
 
-      // Crear contacto bidireccional - yo añado al que me envió la solicitud
       await supabase.from("contacts").upsert({
         user_id: userProfile.id,
         contact_user_id: request.from_user_id,
@@ -124,7 +135,6 @@ export function ProfileScreen({ userProfile, onClose }: ProfileScreenProps) {
         friendship_status: "accepted",
       })
 
-      // El otro usuario también me tiene como contacto
       await supabase.from("contacts").upsert({
         user_id: request.from_user_id,
         contact_user_id: userProfile.id,
@@ -132,7 +142,6 @@ export function ProfileScreen({ userProfile, onClose }: ProfileScreenProps) {
         friendship_status: "accepted",
       })
 
-      // Remover de la lista
       setFriendRequests((prev) => prev.filter((r) => r.id !== request.id))
     } catch (error) {
       console.error("Error accepting request:", error)
@@ -164,11 +173,70 @@ export function ProfileScreen({ userProfile, onClose }: ProfileScreenProps) {
     }
   }
 
+  const handleSaveProfile = async () => {
+    if (!userProfile?.id) return
+
+    // Validate username
+    const cleanUsername = editUsername
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, "")
+    if (cleanUsername.length < 3) {
+      setEditError("El nombre de usuario debe tener al menos 3 caracteres")
+      return
+    }
+
+    setIsSaving(true)
+    setEditError(null)
+
+    try {
+      // Check if username is already taken (if changed)
+      if (cleanUsername !== userProfile.username) {
+        const { data: existingUser } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("username", cleanUsername)
+          .neq("id", userProfile.id)
+          .single()
+
+        if (existingUser) {
+          setEditError("Este nombre de usuario ya está en uso")
+          setIsSaving(false)
+          return
+        }
+      }
+
+      // Update profile
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          username: cleanUsername,
+          display_name: editDisplayName.trim() || null,
+          phone: editPhone.trim() || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", userProfile.id)
+
+      if (error) throw error
+
+      // Callback to refresh profile in parent
+      if (onProfileUpdate) {
+        onProfileUpdate()
+      }
+
+      setShowEditProfile(false)
+    } catch (error) {
+      console.error("Error saving profile:", error)
+      setEditError("Error al guardar los cambios")
+    }
+    setIsSaving(false)
+  }
+
   const menuItems = [
     {
       icon: User,
       label: "Editar perfil",
-      onClick: () => {},
+      onClick: () => setShowEditProfile(true), // Open edit profile
     },
     {
       icon: Bell,
@@ -192,6 +260,102 @@ export function ProfileScreen({ userProfile, onClose }: ProfileScreenProps) {
       onClick: () => {},
     },
   ]
+
+  if (showEditProfile) {
+    return (
+      <div className="fixed inset-0 bg-white z-50 flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 pt-[max(16px,env(safe-area-inset-top))] pb-4 border-b border-gray-100">
+          <button onClick={() => setShowEditProfile(false)} className="p-2 -ml-2 rounded-full hover:bg-gray-100">
+            <ChevronLeft className="w-6 h-6 text-gray-700" />
+          </button>
+          <h1 className="text-lg font-semibold text-gray-900">Editar perfil</h1>
+          <button
+            onClick={handleSaveProfile}
+            disabled={isSaving}
+            className="p-2 -mr-2 text-blue-600 font-medium disabled:opacity-50"
+          >
+            {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : "Guardar"}
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-auto px-6 py-6">
+          {/* Avatar */}
+          <div className="flex flex-col items-center mb-8">
+            <div className="w-24 h-24 rounded-full bg-gray-900 text-white flex items-center justify-center text-3xl font-medium overflow-hidden mb-3">
+              {userProfile?.avatar_url ? (
+                <img src={userProfile.avatar_url || "/placeholder.svg"} alt="" className="w-full h-full object-cover" />
+              ) : (
+                editDisplayName?.[0]?.toUpperCase() || editUsername?.[0]?.toUpperCase() || "U"
+              )}
+            </div>
+            <button className="text-sm text-blue-600">Cambiar foto</button>
+          </div>
+
+          {/* Form fields */}
+          <div className="space-y-6">
+            {/* Username */}
+            <div>
+              <label className="block text-sm font-medium text-gray-500 mb-2">Nombre de usuario</label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">@</span>
+                <input
+                  type="text"
+                  value={editUsername}
+                  onChange={(e) => setEditUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                  placeholder="tunombre"
+                  className="w-full h-12 pl-8 pr-4 text-base rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400"
+                />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Este es el nombre que otros usuarios usarán para encontrarte</p>
+            </div>
+
+            {/* Display name */}
+            <div>
+              <label className="block text-sm font-medium text-gray-500 mb-2">Nombre para mostrar</label>
+              <input
+                type="text"
+                value={editDisplayName}
+                onChange={(e) => setEditDisplayName(e.target.value)}
+                placeholder="Tu nombre"
+                className="w-full h-12 px-4 text-base rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400"
+              />
+            </div>
+
+            {/* Email (read only) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-500 mb-2">Correo electrónico</label>
+              <input
+                type="email"
+                value={userProfile?.email || ""}
+                disabled
+                className="w-full h-12 px-4 text-base rounded-xl border border-gray-200 bg-gray-50 text-gray-500"
+              />
+            </div>
+
+            {/* Phone */}
+            <div>
+              <label className="block text-sm font-medium text-gray-500 mb-2">Teléfono</label>
+              <input
+                type="tel"
+                value={editPhone}
+                onChange={(e) => setEditPhone(e.target.value)}
+                placeholder="+34 600 000 000"
+                className="w-full h-12 px-4 text-base rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400"
+              />
+            </div>
+
+            {editError && (
+              <div className="p-3 bg-red-50 border border-red-100 rounded-xl">
+                <p className="text-sm text-red-600 text-center">{editError}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (showNotifications) {
     return (

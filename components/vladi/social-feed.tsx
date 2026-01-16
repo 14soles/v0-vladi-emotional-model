@@ -154,13 +154,21 @@ export function SocialFeed({ userId, filterGroupId }: SocialFeedProps) {
 
       // Get views by current user
       const entryIds = entriesData.map((e) => e.id)
-      const { data: viewsData } = await supabase
+      const { data: allViewsData } = await supabase
         .from("emotion_views")
-        .select("entry_id")
-        .eq("viewer_id", userId)
+        .select("entry_id, viewer_id")
         .in("entry_id", entryIds)
 
-      const viewedSet = new Set(viewsData?.map((v) => v.entry_id) || [])
+      // Count views per entry and check if current user has viewed
+      const viewCountsMap = new Map<string, number>()
+      const userViewedSet = new Set<string>()
+
+      allViewsData?.forEach((v) => {
+        viewCountsMap.set(v.entry_id, (viewCountsMap.get(v.entry_id) || 0) + 1)
+        if (v.viewer_id === userId) {
+          userViewedSet.add(v.entry_id)
+        }
+      })
 
       // Get comment counts
       const { data: commentsData } = await supabase.from("emotion_comments").select("entry_id").in("entry_id", entryIds)
@@ -181,7 +189,7 @@ export function SocialFeed({ userId, filterGroupId }: SocialFeedProps) {
           intensity: entry.intensity || 5,
           wellbeing: entry.wellbeing || 5,
           notes: entry.notes,
-          views_count: entry.views_count || 0,
+          views_count: viewCountsMap.get(entry.id) || 0,
           created_at: entry.created_at,
           intervention_used: entry.intervention_used,
           profile: {
@@ -191,7 +199,7 @@ export function SocialFeed({ userId, filterGroupId }: SocialFeedProps) {
           },
           comments_count: commentCounts.get(entry.id) || 0,
           is_public: entry.is_public,
-          has_viewed: viewedSet.has(entry.id),
+          has_viewed: userViewedSet.has(entry.id),
           is_own: entry.user_id === userId,
         }
       })
@@ -237,22 +245,29 @@ export function SocialFeed({ userId, filterGroupId }: SocialFeedProps) {
       if (currentlyViewed) {
         await supabase.from("emotion_views").delete().eq("entry_id", entryId).eq("viewer_id", userId)
       } else {
-        await supabase.from("emotion_views").insert({
-          entry_id: entryId,
-          viewer_id: userId,
-        })
-
-        // Update views count
-        const entry = entries.find((e) => e.id === entryId)
-        if (entry && entry.user_id !== userId) {
-          await supabase
-            .from("emotion_entries")
-            .update({ views_count: (entry.views_count || 0) + 1 })
-            .eq("id", entryId)
-        }
+        await supabase.from("emotion_views").upsert(
+          {
+            entry_id: entryId,
+            viewer_id: userId,
+          },
+          {
+            onConflict: "entry_id,viewer_id",
+          },
+        )
       }
     } catch (error) {
       console.error("Error toggling view:", error)
+      setEntries((prev) =>
+        prev.map((e) =>
+          e.id === entryId
+            ? {
+                ...e,
+                has_viewed: currentlyViewed,
+                views_count: currentlyViewed ? e.views_count + 1 : Math.max(0, e.views_count - 1),
+              }
+            : e,
+        ),
+      )
     }
   }
 

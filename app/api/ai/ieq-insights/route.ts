@@ -33,12 +33,6 @@ export async function POST(request: Request) {
   try {
     const data: IEQInsightsRequest = await request.json()
 
-    console.log("[v0] IEQ Insights API - Received data:", {
-      emotionalState: data.emotionalState,
-      deamScore: data.deamScore,
-      checkIns: data.checkIns,
-    })
-
     const { text } = await generateText({
       model: "google/gemini-2.5-flash-image",
       temperature: 0.7,
@@ -82,8 +76,6 @@ Formato de respuesta (SOLO JSON, sin markdown):
 }`,
     })
 
-    console.log("[v0] IEQ Insights API - Raw AI response:", text)
-
     // Try to extract JSON if it's wrapped in markdown
     let cleanedText = text.trim()
     if (cleanedText.startsWith("```json")) {
@@ -98,10 +90,8 @@ Formato de respuesta (SOLO JSON, sin markdown):
     let insights
     try {
       insights = JSON.parse(cleanedText)
-      console.log("[v0] IEQ Insights API - Parsed insights:", insights)
     } catch (parseError) {
-      console.error("[v0] IEQ Insights API - Failed to parse JSON:", parseError)
-      console.error("[v0] IEQ Insights API - Cleaned text was:", cleanedText)
+      // Fallback to default insights if parsing fails
 
       // Fallback with personalized insights based on data
       insights = {
@@ -115,7 +105,6 @@ Formato de respuesta (SOLO JSON, sin markdown):
 
     return NextResponse.json({ insights })
   } catch (error: unknown) {
-    console.error("[v0] IEQ Insights API - Error:", error)
     return NextResponse.json(
       {
         error: "Failed to generate insights",

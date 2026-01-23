@@ -14,7 +14,6 @@ export default async function AppPage() {
       user = result.data?.user || null
       userError = result.error
     } catch (e) {
-      console.error("[v0] Auth error:", e)
       userError = e as Error
     }
 
@@ -28,9 +27,7 @@ export default async function AppPage() {
       .eq("id", user.id)
       .maybeSingle()
 
-    if (profileError) {
-      console.error("[v0] Profile error:", profileError)
-    }
+    // Profile error is non-critical, user will be redirected to onboarding if needed
 
     if (!profile) {
       redirect("/app/onboarding")
@@ -46,8 +43,7 @@ export default async function AppPage() {
     }
 
     return <VladiApp userId={user.id} userProfile={userProfile} />
-  } catch (error) {
-    console.error("[v0] Page error:", error)
+  } catch {
     // If there's an error, redirect to login instead of crashing
     redirect("/auth/login")
   }

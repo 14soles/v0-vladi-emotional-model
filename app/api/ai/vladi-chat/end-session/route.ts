@@ -10,9 +10,6 @@ export async function POST(req: NextRequest) {
   try {
     const { userId, sessionId, messages, sessionStartTime } = await req.json()
 
-    console.log("[v0] End Session - Received messages count:", messages?.length)
-    console.log("[v0] End Session - First 3 messages:", messages?.slice(0, 3))
-
     if (!userId || !sessionId || !messages || !Array.isArray(messages)) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
@@ -33,9 +30,7 @@ export async function POST(req: NextRequest) {
     if (messagesToSave.length > 0) {
       const { error: messagesError } = await supabase.from("vladi_conversation_messages").insert(messagesToSave)
 
-      if (messagesError) {
-        console.error("[v0] Error saving conversation messages:", messagesError)
-      }
+      // Silently handle error - messages save is non-critical
     }
 
     const conversationText = messages
@@ -48,9 +43,6 @@ export async function POST(req: NextRequest) {
         return `${msg.role === "user" ? "Usuario" : "Vladi"}: ${content}`
       })
       .join("\n\n")
-
-    console.log("[v0] End Session - Conversation text length:", conversationText.length)
-    console.log("[v0] End Session - Conversation text:", conversationText.substring(0, 500) + "...")
 
     const summaryPrompt = `Eres Vladi, un asistente de inteligencia emocional. Acabas de terminar una conversación con un usuario y necesitas crear un resumen breve y significativo.
 
@@ -89,16 +81,12 @@ Responde ÚNICAMENTE con el JSON, sin texto adicional ni explicaciones.`
         temperature: 0.7,
       })
 
-      console.log("[v0] End Session - Raw AI summary response:", summaryJson)
-
       const parsed = JSON.parse(
         summaryJson
           .replace(/```json\n?/g, "")
           .replace(/```\n?/g, "")
           .trim(),
       )
-
-      console.log("[v0] End Session - Parsed summary:", parsed.summary)
 
       summaryData = {
         mode: "EMOCIONAL",
@@ -107,8 +95,8 @@ Responde ÚNICAMENTE con el JSON, sin texto adicional ni explicaciones.`
         summary: parsed.summary || "Conversación sobre emociones.",
         key_insights: [parsed.summary || "Conversación guardada"],
       }
-    } catch (error) {
-      console.error("[v0] Error parsing summary JSON:", error)
+    } catch {
+      // Fallback summary if AI parsing fails
       const userMessages = messages.filter((msg: any) => msg.role === "user")
       const firstUserMessage =
         userMessages.length > 0
@@ -148,18 +136,15 @@ Responde ÚNICAMENTE con el JSON, sin texto adicional ni explicaciones.`
     })
 
     if (insertError) {
-      console.error("[v0] Error saving session summary:", insertError)
       throw insertError
     }
-
-    console.log("[v0] End Session - Final summary returned to client:", summaryData.summary)
 
     return NextResponse.json({
       success: true,
       summary: summaryData.summary,
     })
-  } catch (error: any) {
-    console.error("[v0] Error in end-session:", error)
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Internal server error"
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

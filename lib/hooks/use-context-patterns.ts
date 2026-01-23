@@ -84,8 +84,8 @@ export function useContextPatterns(userId: string) {
           const { insight } = await response.json()
           setAiInsight(insight)
         }
-      } catch (error) {
-        console.error("[v0] Error fetching context patterns:", error)
+      } catch {
+        // Silent fail - patterns are non-critical
       } finally {
         setLoading(false)
       }

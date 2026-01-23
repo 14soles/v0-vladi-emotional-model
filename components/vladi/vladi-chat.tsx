@@ -124,8 +124,8 @@ export function VladiChat({
       } else {
         throw new Error(data.error || "Error al guardar la conversación")
       }
-    } catch (error) {
-      console.error("[v0] Error ending chat:", error)
+    } catch {
+      // Fallback if summary generation fails
       setSummaryResult("Conversación guardada")
       setTimeout(() => {
         setIsGeneratingSummary(false)

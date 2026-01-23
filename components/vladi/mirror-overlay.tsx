@@ -95,8 +95,8 @@ export function MirrorOverlay({
             time: "5-10 min",
           },
         })
-      } catch (error) {
-        console.error("[v0] Error generating mirror:", error)
+      } catch {
+        // Fallback if mirror generation fails
         setResult({
           text: "Gracias por compartir tus emociones. Tu registro me ayuda a comprenderte mejor.",
           suggestion: {

@@ -146,12 +146,8 @@ export function HomeView({ userId, userProfile, onAvatarClick, onNotificationsCl
 
             <button
               onClick={() => {
-                console.log("[v0] Personas button clicked!")
                 if (onPersonasClick) {
-                  console.log("[v0] Calling onPersonasClick")
                   onPersonasClick()
-                } else {
-                  console.log("[v0] onPersonasClick is not defined!")
                 }
               }}
               className="p-2 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors flex-shrink-0 ml-1"

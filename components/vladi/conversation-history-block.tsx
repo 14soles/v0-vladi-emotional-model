@@ -69,8 +69,8 @@ export function ConversationHistoryBlock({ userId, onResumeConversation }: Conve
 
         setConversations(conversationsResult.data || [])
         setEmotions(emotionsResult.data || [])
-      } catch (error) {
-        console.error("[v0] Error loading history:", error)
+      } catch {
+        // Silent fail for history loading - non-critical feature
       } finally {
         setLoading(false)
       }
@@ -132,8 +132,8 @@ export function ConversationHistoryBlock({ userId, onResumeConversation }: Conve
     try {
       // Instead of loading old messages, just pass the summary to start a new conversation with context
       onResumeConversation?.(sessionId, [], conversationSummary)
-    } catch (error) {
-      console.error("[v0] Error resuming conversation:", error)
+    } catch {
+      // Silent fail - conversation resumption is non-critical
     }
   }
 

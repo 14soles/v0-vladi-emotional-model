@@ -86,152 +86,164 @@ export function IntensityWellbeingWaveGraph({
 
       {/* Graph */}
       <div className="w-full mb-6">
-        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto" style={{ maxHeight: "450px" }}>
-          {/* Y-axis labels (Intensity) */}
-          <text
-            x={padding.left - 35}
-            y={padding.top}
-            className="text-[10px] sm:text-xs fill-gray-400"
-            textAnchor="middle"
-          >
-            100
-          </text>
-          <text
-            x={padding.left - 35}
-            y={padding.top + graphHeight / 2}
-            className="text-[10px] sm:text-xs fill-gray-400"
-            textAnchor="middle"
-          >
-            50
-          </text>
-          <text
-            x={padding.left - 35}
-            y={padding.top + graphHeight}
-            className="text-[10px] sm:text-xs fill-gray-400"
-            textAnchor="middle"
-          >
-            0
-          </text>
+        {emotions.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+              <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </div>
+            <p className="text-sm text-gray-500 mb-1">Aún no hay datos</p>
+            <p className="text-xs text-gray-400">Registra emociones para ver tu gráfico de intensidad y bienestar</p>
+          </div>
+        ) : (
+          <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto" style={{ maxHeight: "450px" }}>
+            {/* Y-axis labels (Intensity) */}
+            <text
+              x={padding.left - 35}
+              y={padding.top}
+              className="text-[10px] sm:text-xs fill-gray-400"
+              textAnchor="middle"
+            >
+              100
+            </text>
+            <text
+              x={padding.left - 35}
+              y={padding.top + graphHeight / 2}
+              className="text-[10px] sm:text-xs fill-gray-400"
+              textAnchor="middle"
+            >
+              50
+            </text>
+            <text
+              x={padding.left - 35}
+              y={padding.top + graphHeight}
+              className="text-[10px] sm:text-xs fill-gray-400"
+              textAnchor="middle"
+            >
+              0
+            </text>
 
-          {/* X-axis labels (Wellbeing) */}
-          <text x={padding.left} y={height - 25} className="text-[10px] sm:text-xs fill-gray-400" textAnchor="middle">
-            0
-          </text>
-          <text
-            x={padding.left + graphWidth / 4}
-            y={height - 25}
-            className="text-[10px] sm:text-xs fill-gray-400"
-            textAnchor="middle"
-          >
-            25
-          </text>
-          <text
-            x={padding.left + graphWidth / 2}
-            y={height - 25}
-            className="text-[10px] sm:text-xs fill-gray-400"
-            textAnchor="middle"
-          >
-            50
-          </text>
-          <text
-            x={padding.left + (3 * graphWidth) / 4}
-            y={height - 25}
-            className="text-[10px] sm:text-xs fill-gray-400"
-            textAnchor="middle"
-          >
-            75
-          </text>
-          <text
-            x={padding.left + graphWidth}
-            y={height - 25}
-            className="text-[10px] sm:text-xs fill-gray-400"
-            textAnchor="middle"
-          >
-            100
-          </text>
+            {/* X-axis labels (Wellbeing) */}
+            <text x={padding.left} y={height - 25} className="text-[10px] sm:text-xs fill-gray-400" textAnchor="middle">
+              0
+            </text>
+            <text
+              x={padding.left + graphWidth / 4}
+              y={height - 25}
+              className="text-[10px] sm:text-xs fill-gray-400"
+              textAnchor="middle"
+            >
+              25
+            </text>
+            <text
+              x={padding.left + graphWidth / 2}
+              y={height - 25}
+              className="text-[10px] sm:text-xs fill-gray-400"
+              textAnchor="middle"
+            >
+              50
+            </text>
+            <text
+              x={padding.left + (3 * graphWidth) / 4}
+              y={height - 25}
+              className="text-[10px] sm:text-xs fill-gray-400"
+              textAnchor="middle"
+            >
+              75
+            </text>
+            <text
+              x={padding.left + graphWidth}
+              y={height - 25}
+              className="text-[10px] sm:text-xs fill-gray-400"
+              textAnchor="middle"
+            >
+              100
+            </text>
 
-          {/* Axes */}
-          <line
-            x1={padding.left}
-            y1={padding.top}
-            x2={padding.left}
-            y2={padding.top + graphHeight}
-            stroke="#E5E7EB"
-            strokeWidth="2"
-          />
-          <line
-            x1={padding.left}
-            y1={padding.top + graphHeight}
-            x2={padding.left + graphWidth}
-            y2={padding.top + graphHeight}
-            stroke="#1F2937"
-            strokeWidth="2"
-          />
+            {/* Axes */}
+            <line
+              x1={padding.left}
+              y1={padding.top}
+              x2={padding.left}
+              y2={padding.top + graphHeight}
+              stroke="#E5E7EB"
+              strokeWidth="2"
+            />
+            <line
+              x1={padding.left}
+              y1={padding.top + graphHeight}
+              x2={padding.left + graphWidth}
+              y2={padding.top + graphHeight}
+              stroke="#1F2937"
+              strokeWidth="2"
+            />
 
-          {/* Emotion waves */}
-          {emotions.map((emotion, index) => (
-            <g key={`wave-${index}`}>
-              <defs>
-                <linearGradient id={`gradient-${index}`} x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor={emotion.color} stopOpacity="0.6" />
-                  <stop offset="100%" stopColor={emotion.color} stopOpacity="0.1" />
-                </linearGradient>
-              </defs>
-              <polygon points={generateWave(emotion)} fill={`url(#gradient-${index})`} stroke="none" />
-            </g>
-          ))}
+            {/* Emotion waves */}
+            {emotions.map((emotion, index) => (
+              <g key={`wave-${index}`}>
+                <defs>
+                  <linearGradient id={`gradient-${index}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor={emotion.color} stopOpacity="0.6" />
+                    <stop offset="100%" stopColor={emotion.color} stopOpacity="0.1" />
+                  </linearGradient>
+                </defs>
+                <polygon points={generateWave(emotion)} fill={`url(#gradient-${index})`} stroke="none" />
+              </g>
+            ))}
 
-          {/* Emotion points */}
-          {emotions.map((emotion, index) => {
-            const x = (emotion.wellbeing / 100) * graphWidth + padding.left // Bienestar en eje X
-            const y = padding.top + graphHeight - (emotion.intensity / 100) * graphHeight // Energía en eje Y
-            return (
-              <circle
-                key={`point-${index}`}
-                cx={x}
-                cy={y}
-                r="6"
-                fill={emotion.color}
-                stroke="white"
-                strokeWidth="2"
-                className="cursor-pointer hover:r-8 transition-all"
-                onClick={() => handleEmotionClick(emotion)}
-              />
-            )
-          })}
+            {/* Emotion points */}
+            {emotions.map((emotion, index) => {
+              const x = (emotion.wellbeing / 100) * graphWidth + padding.left // Bienestar en eje X
+              const y = padding.top + graphHeight - (emotion.intensity / 100) * graphHeight // Energía en eje Y
+              return (
+                <circle
+                  key={`point-${index}`}
+                  cx={x}
+                  cy={y}
+                  r="6"
+                  fill={emotion.color}
+                  stroke="white"
+                  strokeWidth="2"
+                  className="cursor-pointer hover:r-8 transition-all"
+                  onClick={() => handleEmotionClick(emotion)}
+                />
+              )
+            })}
 
-          {/* Selected emotion tooltip */}
-          {selectedEmotion && (
-            <g>
-              <rect
-                x={(selectedEmotion.wellbeing / 100) * graphWidth + padding.left - 60}
-                y={padding.top + graphHeight - (selectedEmotion.intensity / 100) * graphHeight - 50}
-                width="120"
-                height="40"
-                rx="8"
-                fill="white"
-                stroke={selectedEmotion.color}
-                strokeWidth="2"
-              />
-              <text
-                x={(selectedEmotion.wellbeing / 100) * graphWidth + padding.left}
-                y={padding.top + graphHeight - (selectedEmotion.intensity / 100) * graphHeight - 35}
-                className="text-xs font-medium fill-gray-900"
-                textAnchor="middle"
-              >
-                {selectedEmotion.emotion}
-              </text>
-              <text
-                x={(selectedEmotion.wellbeing / 100) * graphWidth + padding.left}
-                y={padding.top + graphHeight - (selectedEmotion.intensity / 100) * graphHeight - 20}
-                className="text-xs fill-gray-500"
-                textAnchor="middle"
-              >
-                E:{selectedEmotion.intensity} B:{selectedEmotion.wellbeing}
-              </text>
-            </g>
-          )}
-        </svg>
+            {/* Selected emotion tooltip */}
+            {selectedEmotion && (
+              <g>
+                <rect
+                  x={(selectedEmotion.wellbeing / 100) * graphWidth + padding.left - 60}
+                  y={padding.top + graphHeight - (selectedEmotion.intensity / 100) * graphHeight - 50}
+                  width="120"
+                  height="40"
+                  rx="8"
+                  fill="white"
+                  stroke={selectedEmotion.color}
+                  strokeWidth="2"
+                />
+                <text
+                  x={(selectedEmotion.wellbeing / 100) * graphWidth + padding.left}
+                  y={padding.top + graphHeight - (selectedEmotion.intensity / 100) * graphHeight - 35}
+                  className="text-xs font-medium fill-gray-900"
+                  textAnchor="middle"
+                >
+                  {selectedEmotion.emotion}
+                </text>
+                <text
+                  x={(selectedEmotion.wellbeing / 100) * graphWidth + padding.left}
+                  y={padding.top + graphHeight - (selectedEmotion.intensity / 100) * graphHeight - 20}
+                  className="text-xs fill-gray-500"
+                  textAnchor="middle"
+                >
+                  E:{selectedEmotion.intensity} B:{selectedEmotion.wellbeing}
+                </text>
+              </g>
+            )}
+          </svg>
+        )}
       </div>
 
       {/* Averages */}

@@ -267,12 +267,10 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
   }, [userId])
 
   const handleOpenGroupsPeople = useCallback(() => {
-    console.log("[v0] VladiApp - Opening Grupos y Personas screen")
     setCurrentScreen("personas")
   }, [])
 
   const handleCloseGroupsPeople = useCallback(() => {
-    console.log("[v0] VladiApp - Closing Grupos y Personas screen")
     setCurrentScreen("main")
   }, [])
 
@@ -414,5 +412,3 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
     </div>
   )
 }
-
-export { VladiApp }

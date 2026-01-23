@@ -57,16 +57,8 @@ export function IEQPanel({ userId, onStartChat }: IEQPanelProps) {
   useEffect(() => {
     async function fetchAIInsights() {
       if (!currentEntries || currentEntries.length === 0) {
-        console.log("[v0] IEQ Panel - Skipping AI insights, no entries")
         return
       }
-
-      console.log("[v0] IEQ Panel - Fetching AI insights with data:", {
-        emotionalState,
-        deamScore,
-        checkIns: currentEntries.length,
-        granularityScore: granularityData.score,
-      })
 
       setLoadingInsights(true)
       try {
@@ -93,13 +85,10 @@ export function IEQPanel({ userId, onStartChat }: IEQPanelProps) {
 
         if (response.ok) {
           const data = await response.json()
-          console.log("[v0] IEQ Panel - Received AI insights:", data.insights)
           setAiInsights(data.insights)
-        } else {
-          console.error("[v0] IEQ Panel - Failed to fetch insights:", response.status, response.statusText)
         }
       } catch (error) {
-        console.error("[v0] IEQ Panel - Error fetching AI insights:", error)
+        // Silently fail for AI insights - non-critical feature
       } finally {
         setLoadingInsights(false)
       }
@@ -326,19 +315,17 @@ export function IEQPanel({ userId, onStartChat }: IEQPanelProps) {
         </div>
 
         {/* Intensidad y bienestar - Full width */}
-        {emotionPoints.length > 0 && (
-          <div className="w-full">
-            <IntensityWellbeingWaveGraph
-              emotions={emotionPoints}
-              averageIntensity={averageIntensity}
-              averageWellbeing={averageWellbeing}
-              aiInsight={loadingInsights ? "Analizando tus patrones..." : aiInsights?.intensityWellbeing}
-              onEmotionClick={(emotion) => {
-                // Emotion clicked
-              }}
-            />
-          </div>
-        )}
+        <div className="w-full">
+          <IntensityWellbeingWaveGraph
+            emotions={emotionPoints}
+            averageIntensity={averageIntensity}
+            averageWellbeing={averageWellbeing}
+            aiInsight={loadingInsights ? "Analizando tus patrones..." : aiInsights?.intensityWellbeing}
+            onEmotionClick={(emotion) => {
+              // Emotion clicked
+            }}
+          />
+        </div>
 
         {/* Granularidad - Full width */}
         {currentEntries.length > 0 && (
@@ -411,12 +398,8 @@ export function IEQPanel({ userId, onStartChat }: IEQPanelProps) {
           <ConversationHistoryBlock
             userId={userId}
             onResumeConversation={(sessionId, messages, summary) => {
-              console.log("[v0] Resuming conversation with summary:", summary)
               if (onStartChat && summary) {
-                // Pass the summary to the chat component
                 onStartChat(summary)
-                // Note: We need to pass the summary through the parent component
-                // This will be handled in the parent that manages VladiChat
               }
             }}
           />

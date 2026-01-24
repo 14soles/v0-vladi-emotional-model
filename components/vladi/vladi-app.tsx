@@ -175,6 +175,8 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
             when_occurred: timeReference || null, // Save time reference
             certainty_bucket: certainty || null, // Save certainty
             is_public: isPublic,
+            visibility: isPublic ? "friends" : "private",
+            anonymous_in_feed: false,
             created_at: new Date().toISOString(),
           })
         } catch (error) {

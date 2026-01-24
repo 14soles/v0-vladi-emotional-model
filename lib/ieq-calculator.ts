@@ -196,46 +196,121 @@ export function calculateInertiaWithWeekly(entries: EmotionEntry[]): {
   }
 }
 
-export function calculateDEAMScore(entries: EmotionEntry[], periodDays: number): { score: number; delta: number } {
+// Extended DEAM Score calculation with intervention data
+export interface DEAMScoreResult {
+  score: number
+  delta: number
+  components: {
+    G: number // Granularity
+    P: number // Perception/Awareness  
+    C: number // Context/Triggers
+    A: number // Adaptability
+    Ie: number // Inertia
+  }
+  reliability: "low" | "medium" | "high"
+}
+
+export function calculateDEAMScore(
+  entries: EmotionEntry[], 
+  periodDays: number,
+  interventions: InterventionLogEntry[] = [],
+  previousEntries: EmotionEntry[] = []
+): DEAMScoreResult {
   if (entries.length < 4) {
-    return { score: 0, delta: 0 }
+    return { 
+      score: 0, 
+      delta: 0, 
+      components: { G: 0, P: 0, C: 0, A: 0, Ie: 0 },
+      reliability: "low"
+    }
   }
 
-  // Calculate submetrics (simplified for v1)
-  // G: Granularity - measure emotion diversity
-  const emotionSet = new Set(entries.map((e) => e.emotion))
-  const G = Math.min(emotionSet.size / 10, 1) // Normalize by typical max
+  // 1. G: Granularity - emotion diversity using entropy
+  const granularityData = calculateGranularity(entries, previousEntries)
+  const G = granularityData.granularityNorm
 
-  // C: Coherence - measure intensity consistency
-  const avgIntensity = entries.reduce((sum, e) => sum + e.intensity, 0) / entries.length
-  const variance = entries.reduce((sum, e) => sum + Math.pow(e.intensity - avgIntensity, 2), 0) / entries.length
-  const C = 1 - Math.min(Math.sqrt(variance), 1)
+  // 2. P: Perception/Awareness - how well user identifies emotions
+  const awarenessData = calculateEmotionalAwareness(entries, previousEntries, periodDays)
+  const P = awarenessData.ceScore / 100
 
-  // A: Adaptability - measure emotional range
-  const valenceRange = Math.max(...entries.map((e) => e.valence || 0)) - Math.min(...entries.map((e) => e.valence || 0))
-  const A = Math.min(valenceRange / 2, 1)
+  // 3. C: Context/Triggers - how often user provides context
+  const entriesWithContext = entries.filter(e => 
+    (e.activity_context) || 
+    (e.social_context) ||
+    (e.free_text && e.free_text.length > 10)
+  )
+  const C = Math.min(entriesWithContext.length / entries.length, 1)
 
-  // Ie: Inertia - already calculated
+  // 4. A: Adaptability - based on intervention effectiveness
+  let A = 0.5 // Default if no interventions
+  if (interventions.length > 0) {
+    const adaptabilityData = calculateAdaptability(interventions, [])
+    A = adaptabilityData.score / 100
+  } else {
+    // Fallback: measure emotional range (old method)
+    const valenceRange = Math.max(...entries.map((e) => e.valence || 0)) - Math.min(...entries.map((e) => e.valence || 0))
+    A = Math.min(valenceRange / 2, 1)
+  }
+
+  // 5. Ie: Emotional Inertia - recovery time
   const inertiaHours = calculateInertia(entries)
-  const Ie = 1 - Math.min(1 - Math.exp(-inertiaHours / 6), 1)
+  // Lower inertia (faster recovery) = higher score
+  // Normalize: 0-6h = good, 6-12h = medium, >12h = high inertia
+  const Ie = Math.max(0, 1 - (inertiaHours / 12))
 
-  // P: Precision - measure regularity
-  const P = Math.min(entries.length / periodDays, 1)
+  // Calculate weighted DEAM Score
+  // Weights based on scientific importance for emotional intelligence
+  const wG = 0.20 // Granularity
+  const wP = 0.25 // Perception (most important for self-awareness)
+  const wC = 0.15 // Context
+  const wA = 0.25 // Adaptability (key for regulation)
+  const wI = 0.15 // Inertia
 
-  // Combine with equal weights (v1.0)
-  const wG = 0.2
-  const wC = 0.2
-  const wA = 0.2
-  const wI = 0.2
-  const wP = 0.2
-
-  const scoreNorm = wG * G + wC * C + wA * A + wI * Ie + wP * P
+  const scoreNorm = wG * G + wP * P + wC * C + wA * A + wI * Ie
   const score = Math.round(100 * Math.max(0, Math.min(1, scoreNorm)))
 
-  // Mock delta for now (would need previous period calculation)
-  const delta = Math.round(Math.random() * 30 - 5)
+  // Calculate delta from previous period
+  let delta = 0
+  if (previousEntries.length >= 4) {
+    const prevGranularity = calculateGranularity(previousEntries, [])
+    const prevAwareness = calculateEmotionalAwareness(previousEntries, [], periodDays)
+    const prevEntriesWithContext = previousEntries.filter(e => 
+      (e.activity_context) || (e.social_context) || (e.free_text && e.free_text.length > 10)
+    )
+    const prevC = Math.min(prevEntriesWithContext.length / previousEntries.length, 1)
+    const prevInertiaHours = calculateInertia(previousEntries)
+    const prevIe = Math.max(0, 1 - (prevInertiaHours / 12))
+    
+    const prevScoreNorm = wG * prevGranularity.granularityNorm + 
+                          wP * (prevAwareness.ceScore / 100) + 
+                          wC * prevC + 
+                          wA * 0.5 + // No previous interventions tracked
+                          wI * prevIe
+    const prevScore = Math.round(100 * Math.max(0, Math.min(1, prevScoreNorm)))
+    delta = score - prevScore
+  }
 
-  return { score, delta }
+  // Determine reliability based on data quantity
+  let reliability: "low" | "medium" | "high" = "low"
+  const checksPerDay = entries.length / periodDays
+  if (checksPerDay >= 1 && entries.length >= 14) {
+    reliability = "high"
+  } else if (checksPerDay >= 0.5 && entries.length >= 7) {
+    reliability = "medium"
+  }
+
+  return { 
+    score, 
+    delta,
+    components: {
+      G: Math.round(G * 100),
+      P: Math.round(P * 100),
+      C: Math.round(C * 100),
+      A: Math.round(A * 100),
+      Ie: Math.round(Ie * 100)
+    },
+    reliability
+  }
 }
 
 export interface IntensityWellbeingData {
@@ -483,6 +558,157 @@ export interface EmotionalAwarenessData {
   insights: string[]
   interpretationText: string
   nCheckins: number
+}
+
+// --- ADAPTABILITY (A) - NEW IMPROVED CALCULATION ---
+// Measures the user's ability to regulate emotions through interventions
+
+export interface AdaptabilityData {
+  score: number // 0-100
+  deltaPoints: number
+  trend: "up" | "down" | "stable"
+  interventionCount: number
+  avgEffectiveness: number // avg intensity reduction
+  avgPerceivedUtility: number // avg user rating 1-5
+  mostEffectiveType: string | null
+  interpretationText: string
+}
+
+export interface InterventionLogEntry {
+  id: string
+  intervention_type: string
+  intensity_before: number | null
+  intensity_after: number | null
+  perceived_utility: number | null
+  skipped: boolean
+  completed_at: string | null
+}
+
+export function calculateAdaptability(
+  interventions: InterventionLogEntry[],
+  previousInterventions: InterventionLogEntry[] = []
+): AdaptabilityData {
+  // Filter completed (non-skipped) interventions with both intensity values
+  const completed = interventions.filter(
+    (i) => !i.skipped && i.completed_at && i.intensity_before !== null && i.intensity_after !== null
+  )
+
+  const previousCompleted = previousInterventions.filter(
+    (i) => !i.skipped && i.completed_at && i.intensity_before !== null && i.intensity_after !== null
+  )
+
+  if (completed.length === 0) {
+    return {
+      score: 0,
+      deltaPoints: 0,
+      trend: "stable",
+      interventionCount: 0,
+      avgEffectiveness: 0,
+      avgPerceivedUtility: 0,
+      mostEffectiveType: null,
+      interpretationText: "Aún no has completado intervenciones para medir tu adaptabilidad emocional.",
+    }
+  }
+
+  // Calculate average effectiveness (intensity reduction)
+  const totalReduction = completed.reduce(
+    (sum, i) => sum + ((i.intensity_before || 0) - (i.intensity_after || 0)),
+    0
+  )
+  const avgEffectiveness = totalReduction / completed.length
+
+  // Calculate average perceived utility
+  const withUtility = completed.filter((i) => i.perceived_utility !== null)
+  const avgPerceivedUtility =
+    withUtility.length > 0
+      ? withUtility.reduce((sum, i) => sum + (i.perceived_utility || 0), 0) / withUtility.length
+      : 0
+
+  // Calculate engagement score (how many interventions completed vs skipped)
+  const allWithSkipped = interventions.filter((i) => i.completed_at || i.skipped)
+  const engagementRate = allWithSkipped.length > 0 
+    ? completed.length / allWithSkipped.length 
+    : 0
+
+  // Find most effective intervention type
+  const byType: Record<string, { totalDelta: number; count: number }> = {}
+  for (const i of completed) {
+    const type = i.intervention_type
+    if (!byType[type]) {
+      byType[type] = { totalDelta: 0, count: 0 }
+    }
+    byType[type].totalDelta += (i.intensity_before || 0) - (i.intensity_after || 0)
+    byType[type].count++
+  }
+
+  let mostEffectiveType: string | null = null
+  let maxAvgDelta = 0
+  for (const [type, stats] of Object.entries(byType)) {
+    const avgD = stats.totalDelta / stats.count
+    if (avgD > maxAvgDelta) {
+      maxAvgDelta = avgD
+      mostEffectiveType = type
+    }
+  }
+
+  // Calculate Adaptability Score (0-100)
+  // Formula: A = 0.4 * Effectiveness + 0.3 * PerceivedUtility + 0.3 * Engagement
+  const effectivenessNorm = Math.min(avgEffectiveness / 5, 1) // Normalize by max expected reduction of 5 points
+  const utilityNorm = avgPerceivedUtility / 5 // Already 1-5 scale
+  const engagementNorm = engagementRate
+
+  const score = Math.round(100 * (0.4 * effectivenessNorm + 0.3 * utilityNorm + 0.3 * engagementNorm))
+
+  // Calculate previous score and delta
+  let previousScore = 0
+  if (previousCompleted.length > 0) {
+    const prevTotalReduction = previousCompleted.reduce(
+      (sum, i) => sum + ((i.intensity_before || 0) - (i.intensity_after || 0)),
+      0
+    )
+    const prevAvgEffectiveness = prevTotalReduction / previousCompleted.length
+    const prevWithUtility = previousCompleted.filter((i) => i.perceived_utility !== null)
+    const prevAvgUtility =
+      prevWithUtility.length > 0
+        ? prevWithUtility.reduce((sum, i) => sum + (i.perceived_utility || 0), 0) / prevWithUtility.length
+        : 0
+    const prevAllWithSkipped = previousInterventions.filter((i) => i.completed_at || i.skipped)
+    const prevEngagement = prevAllWithSkipped.length > 0 
+      ? previousCompleted.length / prevAllWithSkipped.length 
+      : 0
+
+    const prevEffNorm = Math.min(prevAvgEffectiveness / 5, 1)
+    const prevUtilNorm = prevAvgUtility / 5
+    previousScore = Math.round(100 * (0.4 * prevEffNorm + 0.3 * prevUtilNorm + 0.3 * prevEngagement))
+  }
+
+  const deltaPoints = score - previousScore
+  let trend: "up" | "down" | "stable" = "stable"
+  if (deltaPoints >= 5) trend = "up"
+  else if (deltaPoints <= -5) trend = "down"
+
+  // Generate interpretation text
+  let interpretationText = ""
+  if (score >= 75) {
+    interpretationText = "Tus intervenciones están siendo muy efectivas para regular tu intensidad emocional."
+  } else if (score >= 50) {
+    interpretationText = "Las intervenciones te ayudan a reducir la intensidad de tus emociones de forma moderada."
+  } else if (score >= 25) {
+    interpretationText = "Estás explorando intervenciones. Prueba diferentes técnicas para encontrar las que mejor te funcionen."
+  } else {
+    interpretationText = "Completar más intervenciones te ayudará a desarrollar tu capacidad de regulación emocional."
+  }
+
+  return {
+    score,
+    deltaPoints,
+    trend,
+    interventionCount: completed.length,
+    avgEffectiveness: Math.round(avgEffectiveness * 10) / 10,
+    avgPerceivedUtility: Math.round(avgPerceivedUtility * 10) / 10,
+    mostEffectiveType,
+    interpretationText,
+  }
 }
 
 export function calculateEmotionalAwareness(

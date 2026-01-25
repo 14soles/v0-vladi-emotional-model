@@ -76,7 +76,7 @@
 #### 1.3 Estado Global Fragmentado
 
 **Problemas detectados**:
-```typescript
+\`\`\`typescript
 // Estado en Zustand
 lib/vladi-store.ts: entries, activities, company, groups
 
@@ -85,7 +85,7 @@ components/vladi/ieq-panel.tsx: currentEntries, previousEntries, loading
 components/vladi/social-feed.tsx: entries, isLoading
 components/vladi/home-view.tsx: notificationCount
 components/vladi/vladi-app.tsx: notificationCount (duplicado)
-```
+\`\`\`
 
 **Impacto**:
 - Mismos datos en múltiples lugares
@@ -112,16 +112,16 @@ components/vladi/vladi-app.tsx: notificationCount (duplicado)
 
 **Ejemplos críticos**:
 
-```typescript
+\`\`\`typescript
 // components/vladi/ieq-panel.tsx (línea 157)
 useEffect(() => {
   loadIEQData() // Función asíncrona no memoizada
 }, [period, userId]) // Re-ejecuta cada cambio de periodo
 
 // Problem: loadIEQData crea nuevas funciones cada render
-```
+\`\`\`
 
-```typescript
+\`\`\`typescript
 // components/vladi/vladi-app.tsx (línea 43)
 useEffect(() => {
   if (!userId) return
@@ -136,7 +136,7 @@ useEffect(() => {
   
   return () => { mounted = false }
 }, [userId]) // Se ejecuta cada vez que userId cambia
-```
+\`\`\`
 
 #### 2.2 Cálculos Pesados en Render
 
@@ -158,7 +158,7 @@ useEffect(() => {
 - Mismos datos solicitados múltiples veces
 
 **Ejemplo**:
-```typescript
+\`\`\`typescript
 // components/vladi/ieq-panel.tsx
 const { data: entries } = await supabase.from('emotion_entries')...
 
@@ -167,7 +167,7 @@ const { data: entries } = await supabase.from('emotion_entries')... // Duplicado
 
 // components/vladi/home-view.tsx
 const { count } = await supabase.from('friend_requests')... // Siempre fresh
-```
+\`\`\`
 
 ### 3. PROBLEMAS DE MANTENIBILIDAD
 
@@ -179,20 +179,20 @@ const { count } = await supabase.from('friend_requests')... // Siempre fresh
 - Cambios en fórmulas invalidan históricos
 
 **Debería ser**:
-```typescript
+\`\`\`typescript
 interface MetricSnapshot {
   computed_at: string
   model_version: 'DEAM_EQ_v1.0' | 'DEAM_EQ_v1.1'
   values: Record<string, number>
 }
-```
+\`\`\`
 
 #### 3.2 Console.logs Sin Eliminar
 
 **Detectados**: 48 ocurrencias
 
 **Ejemplos**:
-```typescript
+\`\`\`typescript
 // app/auth/sign-up/page.tsx
 console.log("[v0] Starting user registration with email:", email)
 console.log("[v0] User created successfully, profile created automatically by trigger")
@@ -204,7 +204,7 @@ console.error("[v0] Profile error:", profileError)
 // components/vladi/vladi-app.tsx
 console.error("Error saving emotion:", error)
 console.error("Error loading notifications:", error)
-```
+\`\`\`
 
 **Problema**:
 - Logs de debugging en producción
@@ -214,7 +214,7 @@ console.error("Error loading notifications:", error)
 #### 3.3 Naming Inconsistente
 
 **Detectado**:
-```typescript
+\`\`\`typescript
 // Mezcla de camelCase y snake_case
 emotion_entries  // snake_case (DB)
 emotionData      // camelCase (código)
@@ -225,12 +225,12 @@ userId           // camelCase
 calculateMetrics()     // ¿Qué métricas?
 loadData()             // ¿Qué datos?
 handleSubmit()         // ¿Qué submit?
-```
+\`\`\`
 
 #### 3.4 Tipos Duplicados
 
 **Detectados**:
-```typescript
+\`\`\`typescript
 // lib/vladi-types.ts
 export interface EmotionEntry { ... }
 
@@ -239,7 +239,7 @@ export interface EmotionEntry { ... } // Diferente definición
 
 // lib/vladi-store.ts
 export interface MoodEntry { ... } // Mismo concepto, nombre diferente
-```
+\`\`\`
 
 ### 4. PROBLEMAS DE SEGURIDAD Y DATOS
 
@@ -251,32 +251,32 @@ export interface MoodEntry { ... } // Mismo concepto, nombre diferente
 - No hay schemas Zod/Yup
 
 **Ejemplo**:
-```typescript
+\`\`\`typescript
 // components/vladi/vladi-app.tsx
 await supabase.from("emotion_entries").insert({
   emotion: emotionData.emotion, // ¿Validado?
   intensity: emotionData.intensity, // ¿0-100?
   // ... sin validación previa
 })
-```
+\`\`\`
 
 #### 4.2 Manejo de Errores Básico
 
 **Detectado**:
-```typescript
+\`\`\`typescript
 try {
   await supabase.from(...).insert(...)
 } catch (error) {
   console.error("Error saving emotion:", error) // Solo log
   // No hay retry, no hay UI feedback, no hay tracking
 }
-```
+\`\`\`
 
 ### 5. ESTRUCTURA ACTUAL vs IDEAL
 
 #### Estructura Actual
 
-```
+\`\`\`
 app/
 ├── auth/           # Auth pages (OK)
 ├── app/            # Protected routes (confuso)
@@ -294,11 +294,11 @@ lib/
 ├── vladi-store.ts           # Store + lógica
 ├── vladi-types.ts           # Tipos mezclados
 └── supabase/                # OK
-```
+\`\`\`
 
 #### Estructura Ideal (Propuesta)
 
-```
+\`\`\`
 src/
 ├── app/                     # Next.js routes
 │   ├── (auth)/             # Auth routes group
@@ -365,7 +365,7 @@ src/
     ├── unit/
     ├── integration/
     └── e2e/
-```
+\`\`\`
 
 ---
 
@@ -414,7 +414,7 @@ src/
 - [ ] Implementar `React.memo` en componentes puros
 
 **Ejemplo**:
-```typescript
+\`\`\`typescript
 // Antes
 const metrics = calculateDEAMMetrics(entries)
 
@@ -423,7 +423,7 @@ const metrics = useMemo(() =>
   calculateDEAMMetrics(entries), 
   [entries]
 )
-```
+\`\`\`
 
 **Archivos**:
 - `components/vladi/ieq-panel.tsx`
@@ -443,7 +443,7 @@ const metrics = useMemo(() =>
 
 Crear hooks personalizados que encapsulen lógica:
 
-```typescript
+\`\`\`typescript
 // features/stats/hooks/use-ieq-data.ts
 export function useIEQData(userId: string, period: TimePeriod) {
   const [data, setData] = useState<IEQData | null>(null)
@@ -461,7 +461,7 @@ export function useIEQData(userId: string, period: TimePeriod) {
   
   return { data, loading }
 }
-```
+\`\`\`
 
 **Hooks a crear**:
 - [ ] `features/checkin/hooks/use-checkin.ts`
@@ -474,7 +474,7 @@ export function useIEQData(userId: string, period: TimePeriod) {
 
 Servicios que encapsulan acceso a datos:
 
-```typescript
+\`\`\`typescript
 // features/stats/services/stats.service.ts
 export const statsService = {
   async getIEQData(userId: string, period: TimePeriod): Promise<IEQData> {
@@ -488,7 +488,7 @@ export const statsService = {
     return formatIEQData(metrics)
   }
 }
-```
+\`\`\`
 
 **Services a crear**:
 - [ ] `features/checkin/services/checkin.service.ts`
@@ -500,7 +500,7 @@ export const statsService = {
 
 Capa que abstrae acceso a Supabase:
 
-```typescript
+\`\`\`typescript
 // core/data/repositories/checkin.repository.ts
 export const checkinRepository = {
   async getByUserAndPeriod(
@@ -538,7 +538,7 @@ export const checkinRepository = {
     return mapToCheckInEntry(data)
   }
 }
-```
+\`\`\`
 
 **Repositories a crear**:
 - [ ] `core/data/repositories/checkin.repository.ts`
@@ -554,7 +554,7 @@ export const checkinRepository = {
 
 Dividir en módulos pequeños:
 
-```
+\`\`\`
 features/deam-eq/
 ├── domain/
 │   ├── metrics/
@@ -567,11 +567,11 @@ features/deam-eq/
 │   └── version.ts                # DEAM_EQ_VERSION = '1.0'
 ├── calculator.ts                 # Orquestador principal
 └── index.ts                      # Public API
-```
+\`\`\`
 
 **Paso 2**: Implementar versionado
 
-```typescript
+\`\`\`typescript
 // features/deam-eq/domain/version.ts
 export const DEAM_EQ_VERSION = '1.0' as const
 
@@ -588,7 +588,7 @@ export interface MetricSnapshot {
     awareness: number
   }
 }
-```
+\`\`\`
 
 **Paso 3**: Eliminar cálculos duplicados
 
@@ -605,12 +605,12 @@ export interface MetricSnapshot {
 
 **Objetivo**: Cacheo inteligente, re-fetches automáticos
 
-```bash
+\`\`\`bash
 pnpm add @tanstack/react-query
-```
+\`\`\`
 
 **Configurar**:
-```typescript
+\`\`\`typescript
 // app/providers.tsx
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
@@ -631,10 +631,10 @@ export function Providers({ children }) {
     </QueryClientProvider>
   )
 }
-```
+\`\`\`
 
 **Migrar queries**:
-```typescript
+\`\`\`typescript
 // Antes
 const [entries, setEntries] = useState([])
 useEffect(() => {
@@ -649,7 +649,7 @@ const { data: entries, isLoading } = useQuery({
   queryFn: () => checkinRepository.getByUserAndPeriod(userId, period),
   enabled: !!userId,
 })
-```
+\`\`\`
 
 **Queries a migrar**:
 - [ ] Check-ins
@@ -703,7 +703,7 @@ const { data: entries, isLoading } = useQuery({
 
 **Schemas a crear**:
 
-```typescript
+\`\`\`typescript
 // features/checkin/domain/schemas.ts
 import { z } from 'zod'
 
@@ -726,10 +726,10 @@ export const checkInSchema = z.object({
 })
 
 export type CreateCheckInDTO = z.infer<typeof checkInSchema>
-```
+\`\`\`
 
 **Usar en repositories**:
-```typescript
+\`\`\`typescript
 async create(data: unknown): Promise<CheckInEntry> {
   // Validar entrada
   const validated = checkInSchema.parse(data)
@@ -745,13 +745,13 @@ async create(data: unknown): Promise<CheckInEntry> {
   
   return mapToCheckInEntry(result)
 }
-```
+\`\`\`
 
 #### 3.3 Implementar Error Boundaries
 
 **Crear componentes de error**:
 
-```typescript
+\`\`\`typescript
 // core/ui/error-boundary.tsx
 import { Component, ReactNode } from 'react'
 import { logger } from '@/core/lib/logger'
@@ -807,21 +807,21 @@ export class ErrorBoundary extends Component<Props, State> {
     return this.props.children
   }
 }
-```
+\`\`\`
 
 **Envolver features críticos**:
-```typescript
+\`\`\`typescript
 // app/layout.tsx
 <ErrorBoundary>
   <Providers>
     {children}
   </Providers>
 </ErrorBoundary>
-```
+\`\`\`
 
 #### 3.4 Implementar Logger Profesional
 
-```typescript
+\`\`\`typescript
 // core/lib/logger.ts
 type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
@@ -880,10 +880,10 @@ class Logger {
 }
 
 export const logger = new Logger()
-```
+\`\`\`
 
 **Reemplazar console.log**:
-```typescript
+\`\`\`typescript
 // Antes
 console.log("[v0] User data:", userData)
 console.error("Error loading data:", error)
@@ -891,12 +891,12 @@ console.error("Error loading data:", error)
 // Después
 logger.debug("User data loaded", { userData })
 logger.error("Failed to load data", { error: error.message })
-```
+\`\`\`
 
 #### 3.5 Code Splitting y Lazy Loading
 
 **Implementar lazy loading**:
-```typescript
+\`\`\`typescript
 // app/(protected)/stats/page.tsx
 import { lazy, Suspense } from 'react'
 import { Skeleton } from '@/core/ui/skeleton'
@@ -910,7 +910,7 @@ export default function StatsPage() {
     </Suspense>
   )
 }
-```
+\`\`\`
 
 **Features a lazy-load**:
 - [ ] IEQ Panel (736 líneas)
@@ -921,9 +921,9 @@ export default function StatsPage() {
 #### 3.6 Testing
 
 **Configurar Jest + Testing Library**:
-```bash
+\`\`\`bash
 pnpm add -D @testing-library/react @testing-library/jest-dom jest jest-environment-jsdom
-```
+\`\`\`
 
 **Tests prioritarios**:
 

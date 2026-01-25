@@ -68,6 +68,10 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
     setCurrentScreen("notifications")
   }, [])
 
+  const handleNotificationCountChange = useCallback((count: number) => {
+    setNotificationCount(count)
+  }, [])
+
   useEffect(() => {
     if (!userId) return
 
@@ -75,15 +79,26 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
 
     const loadNotifications = async () => {
       try {
-        const { count, error } = await supabase
+        // Count friend requests
+        const { count: friendRequestCount, error: friendError } = await supabase
           .from("friend_requests")
           .select("*", { count: "exact", head: true })
           .eq("to_user_id", userId)
           .eq("status", "pending")
 
-        if (error) throw error
+        if (friendError) throw friendError
+
+        // Count group invitations
+        const { count: groupInvitationCount, error: groupError } = await supabase
+          .from("group_invitations")
+          .select("*", { count: "exact", head: true })
+          .eq("invited_user_id", userId)
+          .eq("status", "pending")
+
+        if (groupError) throw groupError
+
         if (mounted) {
-          setNotificationCount(count || 0)
+          setNotificationCount((friendRequestCount || 0) + (groupInvitationCount || 0))
         }
       } catch (error) {
         handleError(error, "warning", {
@@ -361,26 +376,33 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
     setShowProfile(true)
   }, [])
 
-  const handleCloseProfile = useCallback(() => {
+  const handleCloseProfile = useCallback(async () => {
     setShowProfile(false)
     if (userId) {
-      supabase
-        .from("friend_requests")
-        .select("*", { count: "exact", head: true })
-        .eq("to_user_id", userId)
-        .eq("status", "pending")
-        .then(({ count, error }) => {
-          if (!error) {
-            setNotificationCount(count || 0)
-          }
+      try {
+        const [friendResult, groupResult] = await Promise.all([
+          supabase
+            .from("friend_requests")
+            .select("*", { count: "exact", head: true })
+            .eq("to_user_id", userId)
+            .eq("status", "pending"),
+          supabase
+            .from("group_invitations")
+            .select("*", { count: "exact", head: true })
+            .eq("invited_user_id", userId)
+            .eq("status", "pending")
+        ])
+        
+        if (!friendResult.error && !groupResult.error) {
+          setNotificationCount((friendResult.count || 0) + (groupResult.count || 0))
+        }
+      } catch (error) {
+        handleError(error, "warning", {
+          userId,
+          action: "reload_notifications",
+          component: "VladiApp",
         })
-        .catch((error) =>
-          handleError(error, "warning", {
-            userId,
-            action: "reload_notifications",
-            component: "VladiApp",
-          }),
-        )
+      }
     }
   }, [userId])
 
@@ -421,7 +443,12 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
 
     if (currentScreen === "notifications") {
       return (
-        <NotificationsView onClose={() => setCurrentScreen("main")} userId={userId} userProfile={profileForViews} />
+        <NotificationsView 
+          onClose={() => setCurrentScreen("main")} 
+          userId={userId} 
+          userProfile={profileForViews}
+          onNotificationCountChange={handleNotificationCountChange}
+        />
       )
     }
 

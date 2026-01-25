@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
-import { ChevronLeft, ChevronRight, Search, UserPlus, Check, Loader2, X, MoreHorizontal, Plus } from "lucide-react"
+import { useState, useEffect, useCallback, useRef } from "react"
+import { ChevronLeft, ChevronRight, Search, UserPlus, Check, Loader2, X, MoreHorizontal, Plus, Trash2 } from "lucide-react"
 import { supabase } from "@/lib/supabase/client"
 import { handleError } from "@/lib/error-handler"
 
@@ -78,6 +78,10 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
   // Add members state
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set())
   const [addingMembers, setAddingMembers] = useState(false)
+  
+  // Dropdown state for contact actions
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   // Load data on mount
   useEffect(() => {
@@ -87,6 +91,17 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
       setIsLoading(false)
     }
   }, [userId])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setOpenDropdownId(null)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
 
   // Search users when query changes
   useEffect(() => {
@@ -891,17 +906,35 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
                         )}
                       </div>
                     </div>
-                    <button
-                      onClick={() => removeContact(contact)}
-                      disabled={removingContact === contact.id}
-                      className="p-2 hover:bg-gray-100 rounded-full"
-                    >
-                      {removingContact === contact.id ? (
-                        <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
-                      ) : (
-                        <MoreHorizontal className="w-5 h-5 text-gray-400" />
+                    <div className="relative" ref={openDropdownId === contact.id ? dropdownRef : null}>
+                      <button
+                        onClick={() => setOpenDropdownId(openDropdownId === contact.id ? null : contact.id)}
+                        disabled={removingContact === contact.id}
+                        className="p-2 hover:bg-gray-100 rounded-full"
+                      >
+                        {removingContact === contact.id ? (
+                          <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
+                        ) : (
+                          <MoreHorizontal className="w-5 h-5 text-gray-400" />
+                        )}
+                      </button>
+                      
+                      {/* Dropdown menu */}
+                      {openDropdownId === contact.id && (
+                        <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-50">
+                          <button
+                            onClick={() => {
+                              removeContact(contact)
+                              setOpenDropdownId(null)
+                            }}
+                            className="w-full flex items-center gap-3 px-4 py-3 text-left text-red-600 hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            <span className="text-sm font-medium">Quitar persona</span>
+                          </button>
+                        </div>
                       )}
-                    </button>
+                    </div>
                   </div>
                 ))
               )}

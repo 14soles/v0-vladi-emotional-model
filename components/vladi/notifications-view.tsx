@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
-import { X, UserPlus, Users, Check, XIcon, Bell } from "lucide-react"
+import { useState, useEffect, useCallback, useRef } from "react"
+import { X, UserPlus, Users, Check, XIcon, Bell, RefreshCw } from "lucide-react"
 import { supabase } from "@/lib/supabase/client"
 import Image from "next/image"
 
@@ -13,6 +13,7 @@ interface NotificationsViewProps {
     display_name?: string
     avatar_url?: string
   }
+  onNotificationCountChange?: (count: number) => void
 }
 
 interface FriendRequest {
@@ -46,91 +47,113 @@ interface GroupInvitation {
   } | null
 }
 
-export function NotificationsView({ onClose, userId }: NotificationsViewProps) {
+export function NotificationsView({ onClose, userId, onNotificationCountChange }: NotificationsViewProps) {
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([])
   const [groupInvitations, setGroupInvitations] = useState<GroupInvitation[]>([])
   const [loading, setLoading] = useState(true)
   const [processingId, setProcessingId] = useState<string | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const mountedRef = useRef(true)
 
-  // Load notifications
-  useEffect(() => {
+  // Function to load notifications - can be called for initial load or refresh
+  const loadNotifications = useCallback(async (isRefresh = false) => {
     if (!userId) {
       setLoading(false)
       return
     }
 
-    const loadNotifications = async () => {
+    if (isRefresh) {
+      setIsRefreshing(true)
+    } else {
       setLoading(true)
-      try {
-        // Load pending friend requests
-        const { data: requests, error: requestsError } = await supabase
-          .from("friend_requests")
-          .select(`
-            id,
-            from_user_id,
-            status,
-            created_at,
-            from_user:profiles!friend_requests_from_user_id_fkey(
-              id,
-              display_name,
-              username,
-              avatar_url
-            )
-          `)
-          .eq("to_user_id", userId)
-          .eq("status", "pending")
-          .order("created_at", { ascending: false })
-
-        if (requestsError) {
-          console.error("[v0] Error loading friend requests:", requestsError)
-        } else {
-          const transformedRequests = (requests || []).map(r => ({
-            ...r,
-            from_user: Array.isArray(r.from_user) ? r.from_user[0] : r.from_user
-          }))
-          setFriendRequests(transformedRequests)
-        }
-
-        // Load pending group invitations
-        const { data: invitations, error: invitationsError } = await supabase
-          .from("group_invitations")
-          .select(`
-            id,
-            group_id,
-            inviter_id,
-            status,
-            created_at,
-            group:privacy_groups(id, name),
-            inviter:profiles!group_invitations_inviter_id_fkey(
-              id,
-              display_name,
-              username,
-              avatar_url
-            )
-          `)
-          .eq("invited_user_id", userId)
-          .eq("status", "pending")
-          .order("created_at", { ascending: false })
-
-        if (invitationsError) {
-          console.error("[v0] Error loading group invitations:", invitationsError)
-        } else {
-          const transformedInvitations = (invitations || []).map(i => ({
-            ...i,
-            group: Array.isArray(i.group) ? i.group[0] : i.group,
-            inviter: Array.isArray(i.inviter) ? i.inviter[0] : i.inviter
-          }))
-          setGroupInvitations(transformedInvitations)
-        }
-      } catch (error) {
-        console.error("[v0] Error loading notifications:", error)
-      } finally {
-        setLoading(false)
-      }
     }
 
+    try {
+      // Load pending friend requests
+      const { data: requests, error: requestsError } = await supabase
+        .from("friend_requests")
+        .select(`
+          id,
+          from_user_id,
+          status,
+          created_at,
+          from_user:profiles!friend_requests_from_user_id_fkey(
+            id,
+            display_name,
+            username,
+            avatar_url
+          )
+        `)
+        .eq("to_user_id", userId)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false })
+
+      if (requestsError) {
+        console.error("[v0] Error loading friend requests:", requestsError)
+      } else if (mountedRef.current) {
+        const transformedRequests = (requests || []).map(r => ({
+          ...r,
+          from_user: Array.isArray(r.from_user) ? r.from_user[0] : r.from_user
+        }))
+        setFriendRequests(transformedRequests)
+      }
+
+      // Load pending group invitations
+      const { data: invitations, error: invitationsError } = await supabase
+        .from("group_invitations")
+        .select(`
+          id,
+          group_id,
+          inviter_id,
+          status,
+          created_at,
+          group:privacy_groups(id, name),
+          inviter:profiles!group_invitations_inviter_id_fkey(
+            id,
+            display_name,
+            username,
+            avatar_url
+          )
+        `)
+        .eq("invited_user_id", userId)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false })
+
+      if (invitationsError) {
+        console.error("[v0] Error loading group invitations:", invitationsError)
+      } else if (mountedRef.current) {
+        const transformedInvitations = (invitations || []).map(i => ({
+          ...i,
+          group: Array.isArray(i.group) ? i.group[0] : i.group,
+          inviter: Array.isArray(i.inviter) ? i.inviter[0] : i.inviter
+        }))
+        setGroupInvitations(transformedInvitations)
+      }
+
+      // Update notification count in parent
+      if (mountedRef.current) {
+        const totalCount = (requests?.length || 0) + (invitations?.length || 0)
+        onNotificationCountChange?.(totalCount)
+      }
+    } catch (error) {
+      console.error("[v0] Error loading notifications:", error)
+    } finally {
+      if (mountedRef.current) {
+        setLoading(false)
+        setIsRefreshing(false)
+      }
+    }
+  }, [userId, onNotificationCountChange])
+
+  // Load notifications on mount and set up cleanup
+  useEffect(() => {
+    mountedRef.current = true
     loadNotifications()
-  }, [userId])
+
+    return () => {
+      mountedRef.current = false
+    }
+  }, [loadNotifications])
 
   // Accept friend request
   const handleAcceptFriendRequest = useCallback(async (request: FriendRequest) => {
@@ -145,63 +168,97 @@ export function NotificationsView({ onClose, userId }: NotificationsViewProps) {
 
       if (updateError) throw updateError
 
-      // 2. Create contacts for both users
-      await supabase
+      // Get the sender's profile info for contact name
+      const { data: senderProfile } = await supabase
+        .from("profiles")
+        .select("display_name, username")
+        .eq("id", request.from_user_id)
+        .single()
+      
+      // Get my profile info for contact name
+      const { data: myProfile } = await supabase
+        .from("profiles")
+        .select("display_name, username")
+        .eq("id", userId)
+        .single()
+
+      const senderName = senderProfile?.display_name || senderProfile?.username || "Usuario"
+      const myName = myProfile?.display_name || myProfile?.username || "Usuario"
+
+      // 2. Create contact for me (adding the sender)
+      const { data: myContact } = await supabase
         .from("contacts")
         .upsert({
-          owner_id: userId,
+          user_id: userId,
           contact_user_id: request.from_user_id,
-        }, { onConflict: "owner_id,contact_user_id" })
+          contact_name: senderName,
+          friendship_status: "accepted",
+        }, { onConflict: "user_id,contact_user_id" })
+        .select()
+        .single()
 
-      await supabase
+      // 3. Create contact for the sender (adding me)
+      const { data: theirContact } = await supabase
         .from("contacts")
         .upsert({
-          owner_id: request.from_user_id,
+          user_id: request.from_user_id,
           contact_user_id: userId,
-        }, { onConflict: "owner_id,contact_user_id" })
-
-      // 3. Add to "Todos" group for the requester
-      const { data: requesterTodosGroup } = await supabase
-        .from("privacy_groups")
-        .select("id")
-        .eq("user_id", request.from_user_id)
-        .eq("name", "Todos")
+          contact_name: myName,
+          friendship_status: "accepted",
+        }, { onConflict: "user_id,contact_user_id" })
+        .select()
         .single()
 
-      if (requesterTodosGroup) {
-        await supabase
-          .from("group_members")
-          .upsert({
-            group_id: requesterTodosGroup.id,
-            member_user_id: userId,
-          }, { onConflict: "group_id,member_user_id" })
+      // 4. Add to "Todos" group for current user (me adding the sender)
+      if (myContact) {
+        const { data: myTodosGroup } = await supabase
+          .from("privacy_groups")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("name", "Todos")
+          .single()
+
+        if (myTodosGroup) {
+          await supabase
+            .from("group_members")
+            .upsert({
+              group_id: myTodosGroup.id,
+              contact_id: myContact.id,
+            }, { onConflict: "group_id,contact_id" })
+        }
       }
 
-      // 4. Add to "Todos" group for current user
-      const { data: myTodosGroup } = await supabase
-        .from("privacy_groups")
-        .select("id")
-        .eq("user_id", userId)
-        .eq("name", "Todos")
-        .single()
+      // 5. Add to "Todos" group for the requester (them adding me)
+      if (theirContact) {
+        const { data: requesterTodosGroup } = await supabase
+          .from("privacy_groups")
+          .select("id")
+          .eq("user_id", request.from_user_id)
+          .eq("name", "Todos")
+          .single()
 
-      if (myTodosGroup) {
-        await supabase
-          .from("group_members")
-          .upsert({
-            group_id: myTodosGroup.id,
-            member_user_id: request.from_user_id,
-          }, { onConflict: "group_id,member_user_id" })
+        if (requesterTodosGroup) {
+          await supabase
+            .from("group_members")
+            .upsert({
+              group_id: requesterTodosGroup.id,
+              contact_id: theirContact.id,
+            }, { onConflict: "group_id,contact_id" })
+        }
       }
 
-      // Remove from list
-      setFriendRequests(prev => prev.filter(r => r.id !== request.id))
+      // Remove from list and update count
+      setFriendRequests(prev => {
+        const newRequests = prev.filter(r => r.id !== request.id)
+        onNotificationCountChange?.(newRequests.length + groupInvitations.length)
+        return newRequests
+      })
     } catch (error) {
       console.error("[v0] Error accepting friend request:", error)
     } finally {
       setProcessingId(null)
     }
-  }, [userId])
+  }, [userId, groupInvitations.length, onNotificationCountChange])
 
   // Reject friend request
   const handleRejectFriendRequest = useCallback(async (requestId: string) => {
@@ -213,13 +270,17 @@ export function NotificationsView({ onClose, userId }: NotificationsViewProps) {
         .eq("id", requestId)
 
       if (error) throw error
-      setFriendRequests(prev => prev.filter(r => r.id !== requestId))
+      setFriendRequests(prev => {
+        const newRequests = prev.filter(r => r.id !== requestId)
+        onNotificationCountChange?.(newRequests.length + groupInvitations.length)
+        return newRequests
+      })
     } catch (error) {
       console.error("[v0] Error rejecting friend request:", error)
     } finally {
       setProcessingId(null)
     }
-  }, [])
+  }, [groupInvitations.length, onNotificationCountChange])
 
   // Accept group invitation
   const handleAcceptGroupInvitation = useCallback(async (invitation: GroupInvitation) => {
@@ -242,14 +303,18 @@ export function NotificationsView({ onClose, userId }: NotificationsViewProps) {
           member_user_id: userId,
         }, { onConflict: "group_id,member_user_id" })
 
-      // Remove from list
-      setGroupInvitations(prev => prev.filter(i => i.id !== invitation.id))
+      // Remove from list and update count
+      setGroupInvitations(prev => {
+        const newInvitations = prev.filter(i => i.id !== invitation.id)
+        onNotificationCountChange?.(friendRequests.length + newInvitations.length)
+        return newInvitations
+      })
     } catch (error) {
       console.error("[v0] Error accepting group invitation:", error)
     } finally {
       setProcessingId(null)
     }
-  }, [userId])
+  }, [userId, friendRequests.length, onNotificationCountChange])
 
   // Reject group invitation
   const handleRejectGroupInvitation = useCallback(async (invitationId: string) => {
@@ -261,13 +326,17 @@ export function NotificationsView({ onClose, userId }: NotificationsViewProps) {
         .eq("id", invitationId)
 
       if (error) throw error
-      setGroupInvitations(prev => prev.filter(i => i.id !== invitationId))
+      setGroupInvitations(prev => {
+        const newInvitations = prev.filter(i => i.id !== invitationId)
+        onNotificationCountChange?.(friendRequests.length + newInvitations.length)
+        return newInvitations
+      })
     } catch (error) {
       console.error("[v0] Error rejecting group invitation:", error)
     } finally {
       setProcessingId(null)
     }
-  }, [])
+  }, [friendRequests.length, onNotificationCountChange])
 
   // Format relative time
   const formatRelativeTime = (dateString: string) => {
@@ -292,12 +361,22 @@ export function NotificationsView({ onClose, userId }: NotificationsViewProps) {
       {/* Header */}
       <header className="w-full flex justify-between items-center px-6 py-5 border-b border-gray-100 shrink-0">
         <h1 className="text-2xl font-light text-gray-900">Notificaciones</h1>
-        <button
-          onClick={onClose}
-          className="w-10 h-10 flex items-center justify-center text-gray-900 hover:opacity-70 active:opacity-50"
-        >
-          <X className="w-6 h-6" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => loadNotifications(true)}
+            disabled={isRefreshing || loading}
+            className="w-10 h-10 flex items-center justify-center text-gray-900 hover:opacity-70 active:opacity-50 disabled:opacity-30"
+            aria-label="Actualizar notificaciones"
+          >
+            <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+          </button>
+          <button
+            onClick={onClose}
+            className="w-10 h-10 flex items-center justify-center text-gray-900 hover:opacity-70 active:opacity-50"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
       </header>
 
       {/* Content */}

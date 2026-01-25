@@ -150,8 +150,25 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
     mountedRef.current = true
     loadNotifications()
 
+    // Auto-refresh when page becomes visible (user returns to tab/app)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && mountedRef.current) {
+        loadNotifications(true)
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    // Poll for new notifications every 30 seconds
+    const pollInterval = setInterval(() => {
+      if (mountedRef.current && document.visibilityState === 'visible') {
+        loadNotifications(true)
+      }
+    }, 30000)
+
     return () => {
       mountedRef.current = false
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      clearInterval(pollInterval)
     }
   }, [loadNotifications])
 

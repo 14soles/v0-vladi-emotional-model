@@ -37,8 +37,8 @@ export function CommonHeader({ onNotificationsClick, notificationCount = 0 }: Co
             />
           </svg>
           {notificationCount > 0 && (
-            <span className="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white text-[10px] font-semibold rounded-full flex items-center justify-center">
-              {notificationCount}
+            <span className="absolute top-0 right-0 min-w-5 h-5 px-1 bg-red-500 text-white text-[10px] font-semibold rounded-full flex items-center justify-center">
+              {notificationCount > 99 ? "99+" : notificationCount}
             </span>
           )}
         </button>

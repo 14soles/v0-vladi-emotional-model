@@ -78,7 +78,7 @@ export default function SignUpPage() {
         email,
         password,
         options: {
-          emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${window.location.origin}/app`,
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
           data: {
             phone: `${countryCode}${phone}`,
             display_name: name.trim(),
@@ -138,7 +138,7 @@ export default function SignUpPage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${window.location.origin}/app`,
+          redirectTo: `${window.location.origin}/auth/callback`,
         },
       })
       if (error) throw error

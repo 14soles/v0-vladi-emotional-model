@@ -368,8 +368,27 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
 
     setRemovingContact(contact.id)
     try {
+      // 1. Remove from all groups where this contact is a member (my groups)
+      await supabase.from("group_members").delete().eq("contact_id", contact.id)
+      
+      // 2. Find and remove from the other user's groups
+      const { data: theirContact } = await supabase
+        .from("contacts")
+        .select("id")
+        .eq("user_id", contact.contact_user_id)
+        .eq("contact_user_id", userId)
+        .single()
+      
+      if (theirContact) {
+        await supabase.from("group_members").delete().eq("contact_id", theirContact.id)
+      }
+      
+      // 3. Delete my contact entry
       await supabase.from("contacts").delete().eq("id", contact.id)
+      
+      // 4. Delete their contact entry (mutual removal)
       await supabase.from("contacts").delete().eq("user_id", contact.contact_user_id).eq("contact_user_id", userId)
+      
       setContacts((prev) => prev.filter((c) => c.id !== contact.id))
     } catch (error) {
       handleError(error, "error", {

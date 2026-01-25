@@ -314,18 +314,29 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
       // 1. Update invitation status
       const { error: updateError } = await supabase
         .from("group_invitations")
-        .update({ status: "accepted" })
+        .update({ status: "accepted", responded_at: new Date().toISOString() })
         .eq("id", invitation.id)
 
       if (updateError) throw updateError
 
-      // 2. Add user to the group
-      await supabase
-        .from("group_members")
-        .upsert({
-          group_id: invitation.group_id,
-          member_user_id: userId,
-        }, { onConflict: "group_id,member_user_id" })
+      // 2. Find the contact_id that the group owner (from_user_id) has for the invited user (userId)
+      // The group owner needs to have a contact entry for the invited user
+      const { data: ownerContact } = await supabase
+        .from("contacts")
+        .select("id")
+        .eq("user_id", invitation.from_user_id)
+        .eq("contact_user_id", userId)
+        .single()
+
+      if (ownerContact) {
+        // 3. Add user to the group using the contact_id from the group owner's perspective
+        await supabase
+          .from("group_members")
+          .upsert({
+            group_id: invitation.group_id,
+            contact_id: ownerContact.id,
+          }, { onConflict: "group_id,contact_id" })
+      }
 
       // Remove from list and update count
       setGroupInvitations(prev => {
@@ -512,7 +523,7 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
                         {invitation.inviter?.display_name || invitation.inviter?.username || "Usuario"}
                       </span>
                       {" "}quiere anadirte a su grupo{" "}
-                      <span className="font-semibold">"{invitation.group?.name || "Grupo"}"</span>
+                      <span className="font-semibold">"{invitation.group?.name}"</span>
                     </p>
                     <p className="text-xs text-gray-500 mt-0.5">
                       @{invitation.inviter?.username || "usuario"} · {formatRelativeTime(invitation.created_at)}

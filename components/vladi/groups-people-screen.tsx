@@ -271,6 +271,20 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
 
     setSendingRequest(targetUserId)
     try {
+      // Check if a friend request already exists
+      const { data: existingRequest } = await supabase
+        .from("friend_requests")
+        .select("id, status")
+        .or(`and(from_user_id.eq.${userId},to_user_id.eq.${targetUserId}),and(from_user_id.eq.${targetUserId},to_user_id.eq.${userId})`)
+        .maybeSingle()
+
+      if (existingRequest) {
+        // Request already exists
+        setSearchResults((prev) => prev.map((r) => (r.id === targetUserId ? { ...r, isPending: true } : r)))
+        return
+      }
+
+      // Create the friend request
       const { error: requestError } = await supabase.from("friend_requests").insert({
         from_user_id: userId,
         to_user_id: targetUserId,
@@ -279,12 +293,21 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
 
       if (requestError) throw requestError
 
-      await supabase.from("contacts").upsert({
-        user_id: userId,
-        contact_user_id: targetUserId,
-        contact_name: targetUsername,
-        friendship_status: "pending_sent",
-      })
+      // Create a contact entry to track this relationship
+      const { error: contactError } = await supabase.from("contacts").upsert(
+        {
+          user_id: userId,
+          contact_user_id: targetUserId,
+          contact_name: targetUsername,
+          friendship_status: "pending_sent",
+        },
+        { onConflict: "user_id,contact_user_id" }
+      )
+
+      if (contactError) {
+        console.error("[v0] Error creating contact:", contactError)
+        // Don't throw - the friend request was already created
+      }
 
       setSearchResults((prev) => prev.map((r) => (r.id === targetUserId ? { ...r, isPending: true } : r)))
     } catch (error) {
@@ -293,8 +316,9 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
         action: "send_friend_request",
         component: "GroupsPeopleScreen",
       })
+    } finally {
+      setSendingRequest(null)
     }
-    setSendingRequest(null)
   }
 
   const acceptFriendRequest = async (request: PendingRequest) => {
@@ -309,12 +333,15 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
         .eq("id", request.id)
 
       // Create/update contact for me
-      await supabase.from("contacts").upsert({
-        user_id: userId,
-        contact_user_id: request.from_user_id,
-        contact_name: request.display_name || request.username,
-        friendship_status: "accepted",
-      })
+      await supabase.from("contacts").upsert(
+        {
+          user_id: userId,
+          contact_user_id: request.from_user_id,
+          contact_name: request.display_name || request.username,
+          friendship_status: "accepted",
+        },
+        { onConflict: "user_id,contact_user_id" }
+      )
 
       // Create/update contact for them
       const { data: myProfile } = await supabase
@@ -323,12 +350,15 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
         .eq("id", userId)
         .single()
 
-      await supabase.from("contacts").upsert({
-        user_id: request.from_user_id,
-        contact_user_id: userId,
-        contact_name: myProfile?.display_name || myProfile?.username || "Usuario",
-        friendship_status: "accepted",
-      })
+      await supabase.from("contacts").upsert(
+        {
+          user_id: request.from_user_id,
+          contact_user_id: userId,
+          contact_name: myProfile?.display_name || myProfile?.username || "Usuario",
+          friendship_status: "accepted",
+        },
+        { onConflict: "user_id,contact_user_id" }
+      )
 
       // Reload data
       await loadData()

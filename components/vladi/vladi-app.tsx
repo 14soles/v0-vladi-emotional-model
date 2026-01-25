@@ -4,10 +4,15 @@ import { useState, useCallback, useEffect } from "react"
 import { BottomNavbar } from "./bottom-navbar"
 import { RecordView } from "./record-view"
 import { EmotionScreen, type EmotionData } from "./emotion-screen"
+import { IntensityStep } from "./intensity-step"
 import { ContextSheet } from "./context-sheet"
-import { MirrorOverlay } from "./mirror-overlay"
+import { MirrorOverlay, type LinkedEmotionContext } from "./mirror-overlay"
+import { InterventionRunner } from "./intervention-runner"
+import { INTERVENTIONS, type InterventionType } from "@/lib/types/telemetry"
+import { QUADRANT_STATES } from "@/lib/vladi-data"
 import { ChatsView } from "./chats-view"
 import { PlaceholderView } from "./placeholder-view"
+import { LearnScreen } from "./learn-screen"
 import { HomeView } from "./home-view"
 import { ProfileScreen } from "./profile-screen"
 import { VladiChat } from "./vladi-chat" // Imported VladiChat component
@@ -34,8 +39,9 @@ interface VladiAppProps {
 export default function VladiApp({ userId, userProfile }: VladiAppProps) {
   const [activeTab, setActiveTab] = useState("record")
   const [currentScreen, setCurrentScreen] = useState<
-    "main" | "emotion" | "context" | "mirror" | "vladi-chat" | "notifications" | "personas"
+    "main" | "emotion" | "intensity" | "context" | "mirror" | "vladi-chat" | "notifications" | "personas"
   >("main")
+  const [lastUserIntensity, setLastUserIntensity] = useState<number>(6)
   const [selectedQuadrant, setSelectedQuadrant] = useState<QuadrantId>("green")
   const [emotionData, setEmotionData] = useState<EmotionData | null>(null)
   const [contextData, setContextData] = useState<{ text: string; tags: string[] } | null>(null)
@@ -49,6 +55,10 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
     contextTags?: string[]
   } | null>(null)
   const [conversationSummary, setConversationSummary] = useState<string | undefined>(undefined)
+  const [activeIntervention, setActiveIntervention] = useState<{
+    type: InterventionType
+    linkedEmotion: LinkedEmotionContext
+  } | null>(null)
 
   const { addEntry } = useVladiStore()
 
@@ -84,12 +94,33 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
       }
     }
 
+    // Load last user intensity for default value
+    const loadLastIntensity = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("emotion_entries")
+          .select("intensity")
+          .eq("user_id", userId)
+          .not("intensity", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single()
+
+        if (!error && data?.intensity && mounted) {
+          setLastUserIntensity(data.intensity)
+        }
+      } catch {
+        // Use default of 6 if no previous intensity found
+      }
+    }
+
     loadNotifications()
+    loadLastIntensity()
 
     return () => {
       mounted = false
     }
-  }, [userId]) // Only depend on userId
+  }, [userId])
 
   const handleStartCheckIn = useCallback((quadrant: QuadrantId) => {
     setSelectedQuadrant(quadrant)
@@ -98,7 +129,19 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
 
   const handleEmotionConfirm = useCallback((data: EmotionData) => {
     setEmotionData(data)
+    setCurrentScreen("intensity")
+  }, [])
+
+  const handleIntensityConfirm = useCallback((intensity: number) => {
+    if (emotionData) {
+      setEmotionData({ ...emotionData, intensity })
+      setLastUserIntensity(intensity)
+    }
     setCurrentScreen("context")
+  }, [emotionData])
+
+  const handleIntensityBack = useCallback(() => {
+    setCurrentScreen("emotion")
   }, [])
 
   const handlePublish = useCallback(
@@ -213,6 +256,79 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
     }
     setCurrentScreen("vladi-chat")
   }, [emotionData, contextData])
+
+  // Handle starting an intervention from the mirror overlay
+  const handleStartInterventionFromMirror = useCallback((interventionType: InterventionType, linkedEmotion: LinkedEmotionContext) => {
+    setActiveIntervention({ type: interventionType, linkedEmotion })
+    // Close the mirror but keep emotion data
+    setCurrentScreen("main")
+  }, [])
+
+  // Handle completing an intervention
+  const handleCompleteIntervention = useCallback(async (intensityAfter: number, perceivedUtility: number) => {
+    if (!activeIntervention || !userId) {
+      setActiveIntervention(null)
+      return
+    }
+
+    const intervention = INTERVENTIONS.find(i => i.type === activeIntervention.type)
+    if (!intervention) {
+      setActiveIntervention(null)
+      return
+    }
+
+    try {
+      await supabase.from("interventions_log").insert({
+        user_id: userId,
+        intervention: activeIntervention.type, // Column is 'intervention', not 'intervention_type'
+        source: "post_entry", // From mirror overlay after emotion entry
+        started_at: new Date(Date.now() - intervention.duration_seconds * 1000).toISOString(),
+        ended_at: new Date().toISOString(), // Column is 'ended_at', not 'completed_at'
+        duration_planned_sec: intervention.duration_seconds,
+        duration_actual_sec: intervention.duration_seconds,
+        intensity_before: activeIntervention.linkedEmotion.intensity, // 1-10 scale
+        intensity_after: intensityAfter, // 1-10 scale
+        helpfulness: perceivedUtility, // 1-5 scale
+      })
+    } catch (error) {
+      handleError(error, "warning", {
+        userId,
+        action: "save_intervention",
+        component: "VladiApp",
+      })
+    }
+
+    setActiveIntervention(null)
+    setEmotionData(null)
+    setContextData(null)
+  }, [activeIntervention, userId])
+
+  // Handle skipping an intervention
+  const handleSkipIntervention = useCallback(async (reason: string) => {
+    if (!activeIntervention || !userId) {
+      setActiveIntervention(null)
+      return
+    }
+
+    try {
+      // For cancelled/skipped interventions, we still log them with notes
+      await supabase.from("interventions_log").insert({
+        user_id: userId,
+        intervention: activeIntervention.type,
+        source: "post_entry",
+        started_at: new Date().toISOString(),
+        notes: `Cancelada: ${reason}`,
+      })
+    } catch (error) {
+      handleError(error, "warning", {
+        userId,
+        action: "skip_intervention",
+        component: "VladiApp",
+      })
+    }
+
+    setActiveIntervention(null)
+  }, [activeIntervention, userId])
 
   const handleCloseEmotion = useCallback(() => {
     setCurrentScreen("main")
@@ -342,7 +458,14 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
           />
         )
       case "aprende":
-        return <PlaceholderView title="Aprende" icon="brain" />
+        return (
+          <LearnScreen
+            userId={userId}
+            userProfile={profileForViews}
+            onAvatarClick={handleOpenProfile}
+            onNotificationsClick={handleNotificationsClick}
+          />
+        )
       case "chats":
         return (
           <ChatsView
@@ -377,8 +500,18 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
         <BottomNavbar activeTab={activeTab} onTabChange={handleTabChange} userProfile={userProfile} />
       )}
 
-      {(currentScreen === "emotion" || currentScreen === "context") && (
+      {(currentScreen === "emotion" || currentScreen === "intensity" || currentScreen === "context") && (
         <EmotionScreen quadrant={selectedQuadrant} onClose={handleCloseEmotion} onConfirm={handleEmotionConfirm} />
+      )}
+
+      {currentScreen === "intensity" && emotionData && (
+        <IntensityStep
+          emotion={emotionData.emotion}
+          defaultValue={lastUserIntensity}
+          color={QUADRANT_STATES.find(s => s.id === selectedQuadrant)?.color || "#8BB458"}
+          onConfirm={handleIntensityConfirm}
+          onBack={handleIntensityBack}
+        />
       )}
 
       {currentScreen === "context" && emotionData && (
@@ -397,6 +530,17 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
           contextTags={contextData.tags}
           onClose={handleCloseMirror}
           onStartChat={handleStartChatFromMirror}
+          onStartIntervention={handleStartInterventionFromMirror}
+        />
+      )}
+
+      {activeIntervention && (
+        <InterventionRunner
+          intervention={INTERVENTIONS.find(i => i.type === activeIntervention.type)!}
+          linkedEmotion={activeIntervention.linkedEmotion}
+          onComplete={handleCompleteIntervention}
+          onSkip={handleSkipIntervention}
+          onClose={() => setActiveIntervention(null)}
         />
       )}
 

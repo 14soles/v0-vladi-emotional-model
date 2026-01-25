@@ -293,21 +293,38 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
         return
       }
 
-      // Delete any existing friend requests between these users (in both directions)
-      // This handles accepted, rejected, or stale pending requests
-      await supabase
+      // Check if there's already a pending request FROM this user TO the target
+      const { data: existingRequest } = await supabase
         .from("friend_requests")
-        .delete()
-        .or(`and(from_user_id.eq.${userId},to_user_id.eq.${targetUserId}),and(from_user_id.eq.${targetUserId},to_user_id.eq.${userId})`)
+        .select("id, status")
+        .eq("from_user_id", userId)
+        .eq("to_user_id", targetUserId)
+        .maybeSingle()
 
-      // Create a new friend request
-      const { error: requestError } = await supabase.from("friend_requests").insert({
-        from_user_id: userId,
-        to_user_id: targetUserId,
-        status: "pending",
-      })
+      if (existingRequest) {
+        if (existingRequest.status === "pending") {
+          // Already pending - just update UI
+          setSearchResults((prev) => prev.map((r) => (r.id === targetUserId ? { ...r, isPending: true } : r)))
+          setSendingRequest(null)
+          return
+        }
+        // If rejected or accepted but no active contact, update the existing request to pending
+        const { error: updateError } = await supabase
+          .from("friend_requests")
+          .update({ status: "pending", created_at: new Date().toISOString() })
+          .eq("id", existingRequest.id)
+        
+        if (updateError) throw updateError
+      } else {
+        // No existing request from this user - create new one
+        const { error: requestError } = await supabase.from("friend_requests").insert({
+          from_user_id: userId,
+          to_user_id: targetUserId,
+          status: "pending",
+        })
 
-      if (requestError) throw requestError
+        if (requestError) throw requestError
+      }
 
       // Create/update a contact entry to track this relationship
       await supabase.from("contacts").upsert(

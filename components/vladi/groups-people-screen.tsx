@@ -48,6 +48,7 @@ interface PendingRequest {
 interface GroupMember {
   id: string
   contact_id: string
+  member_user_id?: string
   contact_name: string
   username?: string
   avatar_url?: string | null
@@ -470,29 +471,36 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
 
     setAddingMembers(true)
     try {
-      const membersToAdd = Array.from(selectedContacts).map((contactId) => ({
-        group_id: selectedGroup.id,
-        contact_id: contactId,
-      }))
-
-      await supabase.from("group_members").insert(membersToAdd)
-
-      // Reload group members
-      await openGroupDetail(selectedGroup)
-      setViewState("group-detail")
+      // Get the contact_user_id for each selected contact
+      const selectedContactsList = contacts.filter(c => selectedContacts.has(c.id))
       
-      // Update group member count
-      setGroups((prev) =>
-        prev.map((g) =>
-          g.id === selectedGroup.id
-            ? { ...g, memberCount: (g.memberCount || 0) + selectedContacts.size }
-            : g
+      // Send group invitations instead of adding directly
+      const invitations = selectedContactsList
+        .filter(c => c.contact_user_id) // Only contacts with user accounts
+        .map((contact) => ({
+          group_id: selectedGroup.id,
+          inviter_id: userId,
+          invited_user_id: contact.contact_user_id,
+          status: "pending",
+        }))
+
+      if (invitations.length > 0) {
+        // Insert invitations (ignore conflicts if already invited)
+        const { error } = await supabase.from("group_invitations").upsert(
+          invitations,
+          { onConflict: "group_id,invited_user_id", ignoreDuplicates: true }
         )
-      )
+        
+        if (error) throw error
+      }
+
+      // Go back to group detail
+      setViewState("group-detail")
+      setSelectedContacts(new Set())
     } catch (error) {
       handleError(error, "error", {
         userId,
-        action: "add_group_members",
+        action: "send_group_invitations",
         component: "GroupsPeopleScreen",
       })
     }
@@ -547,15 +555,15 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
             Cancelar
           </button>
           <div className="text-center">
-            <h2 className="text-base font-semibold text-gray-900">Anadir miembros</h2>
-            <p className="text-xs text-gray-500">{selectedContacts.size}/{contacts.length}</p>
+            <h2 className="text-base font-semibold text-gray-900">Invitar al grupo</h2>
+            <p className="text-xs text-gray-500">{selectedContacts.size} seleccionados</p>
           </div>
           <button
             onClick={addSelectedMembers}
             disabled={selectedContacts.size === 0 || addingMembers}
             className="text-base font-medium text-gray-900 disabled:text-gray-300"
           >
-            {addingMembers ? <Loader2 className="w-5 h-5 animate-spin" /> : "Anadir"}
+            {addingMembers ? <Loader2 className="w-5 h-5 animate-spin" /> : "Invitar"}
           </button>
         </div>
 

@@ -92,7 +92,7 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
         const { count: groupInvitationCount, error: groupError } = await supabase
           .from("group_invitations")
           .select("*", { count: "exact", head: true })
-          .eq("invited_user_id", userId)
+          .eq("to_user_id", userId)
           .eq("status", "pending")
 
         if (groupError) throw groupError
@@ -119,7 +119,7 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
           .not("intensity", "is", null)
           .order("created_at", { ascending: false })
           .limit(1)
-          .single()
+          .maybeSingle()
 
         if (!error && data?.intensity && mounted) {
           setLastUserIntensity(data.intensity)
@@ -389,7 +389,7 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
           supabase
             .from("group_invitations")
             .select("*", { count: "exact", head: true })
-            .eq("invited_user_id", userId)
+            .eq("to_user_id", userId)
             .eq("status", "pending")
         ])
         

@@ -32,7 +32,7 @@ interface FriendRequest {
 interface GroupInvitation {
   id: string
   group_id: string
-  inviter_id: string
+  from_user_id: string
   status: string
   created_at: string
   group: {
@@ -104,28 +104,35 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
         .select(`
           id,
           group_id,
-          inviter_id,
+          from_user_id,
           status,
           created_at,
-          group:privacy_groups(id, name),
-          inviter:profiles!group_invitations_inviter_id_fkey(
-            id,
-            display_name,
-            username,
-            avatar_url
-          )
+          group:privacy_groups(id, name)
         `)
-        .eq("invited_user_id", userId)
+        .eq("to_user_id", userId)
         .eq("status", "pending")
         .order("created_at", { ascending: false })
 
       if (invitationsError) {
         console.error("[v0] Error loading group invitations:", invitationsError)
       } else if (mountedRef.current) {
+        // Fetch inviter profiles separately since foreign key relationship might not exist
+        const fromUserIds = (invitations || []).map(i => i.from_user_id)
+        let inviterMap = new Map()
+        
+        if (fromUserIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from("profiles")
+            .select("id, display_name, username, avatar_url")
+            .in("id", fromUserIds)
+          
+          inviterMap = new Map(profiles?.map(p => [p.id, p]) || [])
+        }
+        
         const transformedInvitations = (invitations || []).map(i => ({
           ...i,
           group: Array.isArray(i.group) ? i.group[0] : i.group,
-          inviter: Array.isArray(i.inviter) ? i.inviter[0] : i.inviter
+          inviter: inviterMap.get(i.from_user_id) || null
         }))
         setGroupInvitations(transformedInvitations)
       }

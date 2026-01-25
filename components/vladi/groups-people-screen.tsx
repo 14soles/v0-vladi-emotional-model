@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
-import { ChevronLeft, ChevronRight, Search, UserPlus, Check, Loader2, X, MoreHorizontal, Plus } from "lucide-react"
+import { useState, useEffect, useCallback, useRef } from "react"
+import { ChevronLeft, ChevronRight, Search, UserPlus, Check, Loader2, X, MoreHorizontal, Plus, Trash2 } from "lucide-react"
 import { supabase } from "@/lib/supabase/client"
 import { handleError } from "@/lib/error-handler"
 
@@ -78,6 +78,10 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
   // Add members state
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set())
   const [addingMembers, setAddingMembers] = useState(false)
+  
+  // Dropdown state for contact actions
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   // Load data on mount
   useEffect(() => {
@@ -87,6 +91,17 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
       setIsLoading(false)
     }
   }, [userId])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setOpenDropdownId(null)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
 
   // Search users when query changes
   useEffect(() => {
@@ -252,34 +267,73 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
   }
 
   const sendFriendRequest = async (targetUserId: string, targetUsername: string) => {
-    if (!userId) return
+    if (!userId) {
+      console.log("[v0] sendFriendRequest: No userId, returning")
+      return
+    }
 
+    console.log("[v0] sendFriendRequest: Starting for", targetUserId, targetUsername)
     setSendingRequest(targetUserId)
     try {
+      // Check if a friend request already exists
+      const { data: existingRequest, error: checkError } = await supabase
+        .from("friend_requests")
+        .select("id, status")
+        .or(`and(from_user_id.eq.${userId},to_user_id.eq.${targetUserId}),and(from_user_id.eq.${targetUserId},to_user_id.eq.${userId})`)
+        .maybeSingle()
+
+      console.log("[v0] sendFriendRequest: Check result", { existingRequest, checkError })
+
+      if (checkError) {
+        console.error("[v0] sendFriendRequest: Error checking existing request", checkError)
+      }
+
+      if (existingRequest) {
+        // Request already exists - mark as pending and exit gracefully
+        setSearchResults((prev) => prev.map((r) => (r.id === targetUserId ? { ...r, isPending: true } : r)))
+        setSendingRequest(null)
+        return
+      }
+
+      // Create the friend request
+      console.log("[v0] sendFriendRequest: Creating friend request")
       const { error: requestError } = await supabase.from("friend_requests").insert({
         from_user_id: userId,
         to_user_id: targetUserId,
         status: "pending",
       })
 
+      console.log("[v0] sendFriendRequest: Insert result", { requestError })
       if (requestError) throw requestError
 
-      await supabase.from("contacts").upsert({
-        user_id: userId,
-        contact_user_id: targetUserId,
-        contact_name: targetUsername,
-        friendship_status: "pending_sent",
-      })
+      // Create a contact entry to track this relationship
+      const { error: contactError } = await supabase.from("contacts").upsert(
+        {
+          user_id: userId,
+          contact_user_id: targetUserId,
+          contact_name: targetUsername,
+          friendship_status: "pending_sent",
+        },
+        { onConflict: "user_id,contact_user_id" }
+      )
 
+      if (contactError) {
+        console.error("[v0] Error creating contact:", contactError)
+        // Don't throw - the friend request was already created
+      }
+
+      console.log("[v0] sendFriendRequest: Success, updating UI")
       setSearchResults((prev) => prev.map((r) => (r.id === targetUserId ? { ...r, isPending: true } : r)))
     } catch (error) {
+      console.error("[v0] sendFriendRequest: Error caught", error)
       handleError(error, "error", {
         userId,
         action: "send_friend_request",
         component: "GroupsPeopleScreen",
       })
+    } finally {
+      setSendingRequest(null)
     }
-    setSendingRequest(null)
   }
 
   const acceptFriendRequest = async (request: PendingRequest) => {
@@ -294,12 +348,15 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
         .eq("id", request.id)
 
       // Create/update contact for me
-      await supabase.from("contacts").upsert({
-        user_id: userId,
-        contact_user_id: request.from_user_id,
-        contact_name: request.display_name || request.username,
-        friendship_status: "accepted",
-      })
+      await supabase.from("contacts").upsert(
+        {
+          user_id: userId,
+          contact_user_id: request.from_user_id,
+          contact_name: request.display_name || request.username,
+          friendship_status: "accepted",
+        },
+        { onConflict: "user_id,contact_user_id" }
+      )
 
       // Create/update contact for them
       const { data: myProfile } = await supabase
@@ -308,12 +365,15 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
         .eq("id", userId)
         .single()
 
-      await supabase.from("contacts").upsert({
-        user_id: request.from_user_id,
-        contact_user_id: userId,
-        contact_name: myProfile?.display_name || myProfile?.username || "Usuario",
-        friendship_status: "accepted",
-      })
+      await supabase.from("contacts").upsert(
+        {
+          user_id: request.from_user_id,
+          contact_user_id: userId,
+          contact_name: myProfile?.display_name || myProfile?.username || "Usuario",
+          friendship_status: "accepted",
+        },
+        { onConflict: "user_id,contact_user_id" }
+      )
 
       // Reload data
       await loadData()
@@ -353,8 +413,27 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
 
     setRemovingContact(contact.id)
     try {
+      // 1. Remove from all groups where this contact is a member (my groups)
+      await supabase.from("group_members").delete().eq("contact_id", contact.id)
+      
+      // 2. Find and remove from the other user's groups
+      const { data: theirContact } = await supabase
+        .from("contacts")
+        .select("id")
+        .eq("user_id", contact.contact_user_id)
+        .eq("contact_user_id", userId)
+        .single()
+      
+      if (theirContact) {
+        await supabase.from("group_members").delete().eq("contact_id", theirContact.id)
+      }
+      
+      // 3. Delete my contact entry
       await supabase.from("contacts").delete().eq("id", contact.id)
+      
+      // 4. Delete their contact entry (mutual removal)
       await supabase.from("contacts").delete().eq("user_id", contact.contact_user_id).eq("contact_user_id", userId)
+      
       setContacts((prev) => prev.filter((c) => c.id !== contact.id))
     } catch (error) {
       handleError(error, "error", {
@@ -891,17 +970,35 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
                         )}
                       </div>
                     </div>
-                    <button
-                      onClick={() => removeContact(contact)}
-                      disabled={removingContact === contact.id}
-                      className="p-2 hover:bg-gray-100 rounded-full"
-                    >
-                      {removingContact === contact.id ? (
-                        <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
-                      ) : (
-                        <MoreHorizontal className="w-5 h-5 text-gray-400" />
+                    <div className="relative" ref={openDropdownId === contact.id ? dropdownRef : null}>
+                      <button
+                        onClick={() => setOpenDropdownId(openDropdownId === contact.id ? null : contact.id)}
+                        disabled={removingContact === contact.id}
+                        className="p-2 hover:bg-gray-100 rounded-full"
+                      >
+                        {removingContact === contact.id ? (
+                          <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
+                        ) : (
+                          <MoreHorizontal className="w-5 h-5 text-gray-400" />
+                        )}
+                      </button>
+                      
+                      {/* Dropdown menu */}
+                      {openDropdownId === contact.id && (
+                        <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-50">
+                          <button
+                            onClick={() => {
+                              removeContact(contact)
+                              setOpenDropdownId(null)
+                            }}
+                            className="w-full flex items-center gap-3 px-4 py-3 text-left text-red-600 hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            <span className="text-sm font-medium">Quitar persona</span>
+                          </button>
+                        </div>
                       )}
-                    </button>
+                    </div>
                   </div>
                 ))
               )}

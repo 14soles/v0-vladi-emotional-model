@@ -64,7 +64,7 @@ VLADI transforma la experiencia emocional del usuario de algo abstracto y difuso
 
 ### 2.1 Arquitectura de Alto Nivel
 
-```
+\`\`\`
 ┌──────────────────────────────────────────────────────────┐
 │                    CLIENTE (PWA)                         │
 │                                                          │
@@ -96,7 +96,7 @@ VLADI transforma la experiencia emocional del usuario de algo abstracto y difuso
 │  │  Security(RLS) │    │  Subscriptions │              │
 │  └────────────────┘    └────────────────┘              │
 └──────────────────────────────────────────────────────────┘
-```
+\`\`\`
 
 ### 2.2 Stack Tecnológico Detallado
 
@@ -138,7 +138,7 @@ VLADI transforma la experiencia emocional del usuario de algo abstracto y difuso
 
 ### 3.1 Árbol de Directorios
 
-```
+\`\`\`
 vladi-app/
 ├── app/                          # Next.js App Router
 │   ├── layout.tsx                # Layout raíz con fuentes y metadata
@@ -230,7 +230,7 @@ vladi-app/
 ├── package.json                  # Dependencias
 ├── tailwind.config.ts            # Configuración Tailwind (legacy)
 └── README.md                     # Documentación básica
-```
+\`\`\`
 
 ### 3.2 Convenciones de Nomenclatura
 
@@ -250,7 +250,7 @@ vladi-app/
 
 Almacena información pública de usuarios.
 
-```sql
+\`\`\`sql
 CREATE TABLE profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   display_name TEXT,
@@ -280,13 +280,13 @@ CREATE POLICY profiles_update_own ON profiles
 -- Users can insert their own profile
 CREATE POLICY profiles_insert_own ON profiles
   FOR INSERT WITH CHECK (auth.uid() = id);
-```
+\`\`\`
 
 #### 4.1.2 Tabla `emotion_entries`
 
 Almacena todas las entradas emocionales de los usuarios.
 
-```sql
+\`\`\`sql
 CREATE TABLE emotion_entries (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -356,13 +356,13 @@ CREATE POLICY entries_update_own ON emotion_entries
 -- Users can delete their own entries
 CREATE POLICY entries_delete_own ON emotion_entries
   FOR DELETE USING (auth.uid() = user_id);
-```
+\`\`\`
 
 #### 4.1.3 Tabla `contacts`
 
 Gestiona la red de contactos del usuario.
 
-```sql
+\`\`\`sql
 CREATE TABLE contacts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -399,13 +399,13 @@ CREATE POLICY contacts_update_own ON contacts
 
 CREATE POLICY contacts_delete_own ON contacts
   FOR DELETE USING (auth.uid() = user_id);
-```
+\`\`\`
 
 #### 4.1.4 Tabla `privacy_groups`
 
 Define grupos de privacidad para compartir emociones.
 
-```sql
+\`\`\`sql
 CREATE TABLE privacy_groups (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -431,13 +431,13 @@ CREATE POLICY groups_update_own ON privacy_groups
 
 CREATE POLICY groups_delete_own ON privacy_groups
   FOR DELETE USING (auth.uid() = user_id AND is_system = false);
-```
+\`\`\`
 
 #### 4.1.5 Tabla `group_members`
 
 Relación muchos-a-muchos entre grupos y contactos.
 
-```sql
+\`\`\`sql
 CREATE TABLE group_members (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   group_id UUID NOT NULL REFERENCES privacy_groups(id) ON DELETE CASCADE,
@@ -468,13 +468,13 @@ CREATE POLICY members_delete_own ON group_members
   FOR DELETE USING (
     group_id IN (SELECT id FROM privacy_groups WHERE user_id = auth.uid())
   );
-```
+\`\`\`
 
 #### 4.1.6 Tabla `friend_requests`
 
 Gestiona solicitudes de amistad entre usuarios.
 
-```sql
+\`\`\`sql
 CREATE TABLE friend_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   from_user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -500,13 +500,13 @@ CREATE POLICY requests_insert ON friend_requests
 
 CREATE POLICY requests_update_recipient ON friend_requests
   FOR UPDATE USING (auth.uid() = to_user_id);
-```
+\`\`\`
 
 #### 4.1.7 Tabla `emotion_comments`
 
 Comentarios en entradas emocionales compartidas.
 
-```sql
+\`\`\`sql
 CREATE TABLE emotion_comments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   entry_id UUID NOT NULL REFERENCES emotion_entries(id) ON DELETE CASCADE,
@@ -537,13 +537,13 @@ CREATE POLICY comments_insert_own ON emotion_comments
 
 CREATE POLICY comments_delete_own ON emotion_comments
   FOR DELETE USING (auth.uid() = author_id);
-```
+\`\`\`
 
 #### 4.1.8 Tabla `emotion_views`
 
 Tracking de vistas en entradas compartidas.
 
-```sql
+\`\`\`sql
 CREATE TABLE emotion_views (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   entry_id UUID NOT NULL REFERENCES emotion_entries(id) ON DELETE CASCADE,
@@ -564,11 +564,11 @@ CREATE POLICY views_insert ON emotion_views
 
 CREATE POLICY views_select_own ON emotion_views
   FOR SELECT USING (auth.uid() = viewer_id);
-```
+\`\`\`
 
 ### 4.2 Diagrama de Relaciones
 
-```
+\`\`\`
 profiles
    ├─── emotion_entries (1:N)
    │       ├─── emotion_comments (1:N)
@@ -582,13 +582,13 @@ profiles
    │       └─── emotion_entries (1:N)
    │
    └─── friend_requests (1:N, bidireccional)
-```
+\`\`\`
 
 ### 4.3 Migraciones y Versionado
 
 Las migraciones de base de datos se ejecutan mediante scripts SQL en la carpeta `scripts/`:
 
-```
+\`\`\`
 scripts/
 ├── 001_create_profiles.sql
 ├── 002_create_emotion_entries.sql
@@ -598,7 +598,7 @@ scripts/
 ├── 006_create_friend_requests.sql
 ├── 007_create_emotion_comments.sql
 └── 008_create_emotion_views.sql
-```
+\`\`\`
 
 ---
 
@@ -618,7 +618,7 @@ El modelo DEAM IEQ (Distributed Emotion Analysis Model - Inteligencia Emocional 
 
 ### 5.2 Arquitectura del Modelo
 
-```
+\`\`\`
 ┌─────────────────────────────────────────────────────────┐
 │                    MODELO DEAM IEQ                      │
 │                                                         │
@@ -664,13 +664,13 @@ El modelo DEAM IEQ (Distributed Emotion Analysis Model - Inteligencia Emocional 
 │  IEQ Score = 0.2·G + 0.2·C + 0.2·A + 0.2·Ie + 0.2·P   │
 │                                                         │
 └─────────────────────────────────────────────────────────┘
-```
+\`\`\`
 
 ### 5.3 Cuadrantes Emocionales
 
 VLADI organiza las emociones en 4 cuadrantes según el modelo circumplejo:
 
-```
+\`\`\`
                   Alta Activación (Arousal > 0)
                            │
                            │
@@ -686,7 +686,7 @@ Negativa                   0                  Positiva
          Baja activación   │         Baja activación
                            │
                   Baja Activación (Arousal < 0)
-```
+\`\`\`
 
 #### Cuadrante VERDE (Calma)
 - **Valencia:** Positiva (> -0.15)
@@ -720,14 +720,14 @@ Negativa                   0                  Positiva
 
 VLADI incluye un catálogo de **100 emociones** mapeadas a coordenadas (valence, arousal). Cada emoción tiene:
 
-```typescript
+\`\`\`typescript
 interface EmotionMapping {
   emotion: string
   valence: number    // -1 (muy negativo) a +1 (muy positivo)
   arousal: number    // -1 (muy bajo) a +1 (muy alto)
   quadrant: 'green' | 'yellow' | 'red' | 'blue'
 }
-```
+\`\`\`
 
 **Ejemplos:**
 - `Extasiado: { valence: 1.0, arousal: 0.9 }` → AMARILLO
@@ -743,7 +743,7 @@ El mapeo completo está en `lib/emotion-mapping.ts`.
 
 ### 6.1 Flujo de Autenticación
 
-```
+\`\`\`
 ┌──────────────┐
 │ Landing Page │
 └──────┬───────┘
@@ -787,11 +787,11 @@ El mapeo completo está en `lib/emotion-mapping.ts`.
                      │              [Dashboard principal]
                      │
                      └──> Error ──> Mostrar mensaje
-```
+\`\`\`
 
 ### 6.2 Flujo de Registro Emocional (Check-in)
 
-```
+\`\`\`
 ┌─────────────────┐
 │ Dashboard/Home  │
 │                 │
@@ -902,11 +902,11 @@ El mapeo completo está en `lib/emotion-mapping.ts`.
 │  • Recalcular métricas IEQ              │
 │  • Mostrar en feed social (si público)  │
 └─────────────────────────────────────────┘
-```
+\`\`\`
 
 ### 6.3 Flujo de Visualización de IEQ
 
-```
+\`\`\`
 ┌──────────────┐
 │ Dashboard    │
 │              │
@@ -982,11 +982,11 @@ El mapeo completo está en `lib/emotion-mapping.ts`.
 │                                          │
 │  [Botón: Volver]                         │
 └──────────────────────────────────────────┘
-```
+\`\`\`
 
 ### 6.4 Flujo de Social/Compartir
 
-```
+\`\`\`
 ┌──────────────┐
 │ Dashboard    │
 │              │
@@ -1028,7 +1028,7 @@ El mapeo completo está en `lib/emotion-mapping.ts`.
 │  • Notificar a contactos relevantes   │
 │  • Permitir comentarios               │
 └───────────────────────────────────────┘
-```
+\`\`\`
 
 ---
 
@@ -1041,22 +1041,22 @@ El mapeo completo está en `lib/emotion-mapping.ts`.
 **Responsabilidad:** Orquestador principal de la aplicación. Gestiona navegación entre vistas.
 
 **Props:**
-```typescript
+\`\`\`typescript
 interface VladiAppProps {
   userId: string
   userProfile: Profile
 }
-```
+\`\`\`
 
 **Estado:**
-```typescript
+\`\`\`typescript
 const [activeView, setActiveView] = useState<'home' | 'stats' | 'record' | 'chats'>('home')
 const [showProfile, setShowProfile] = useState(false)
 const [showGroups, setShowGroups] = useState(false)
-```
+\`\`\`
 
 **Estructura:**
-```tsx
+\`\`\`tsx
 <div className="h-screen flex flex-col">
   {/* Header */}
   {activeView !== 'record' && (
@@ -1085,7 +1085,7 @@ const [showGroups, setShowGroups] = useState(false)
   {showProfile && <ProfileScreen userProfile={userProfile} onClose={() => setShowProfile(false)} />}
   {showGroups && <GroupsPeopleScreen userId={userId} onClose={() => setShowGroups(false)} />}
 </div>
-```
+\`\`\`
 
 ### 7.2 Componente de Navegación: `BottomNavbar`
 
@@ -1094,16 +1094,16 @@ const [showGroups, setShowGroups] = useState(false)
 **Responsabilidad:** Barra de navegación inferior con 5 tabs.
 
 **Props:**
-```typescript
+\`\`\`typescript
 interface BottomNavbarProps {
   activeTab: 'home' | 'stats' | 'record' | 'chats'
   onTabChange: (tab: string) => void
   userProfile: Profile
 }
-```
+\`\`\`
 
 **Estructura:**
-```tsx
+\`\`\`tsx
 <nav className="fixed bottom-0 left-0 right-0 bg-white border-t">
   <div className="flex items-center justify-around h-16">
     {/* Home */}
@@ -1133,7 +1133,7 @@ interface BottomNavbarProps {
     </Avatar>
   </div>
 </nav>
-```
+\`\`\`
 
 ### 7.3 Vista Home: `HomeView`
 
@@ -1147,7 +1147,7 @@ interface BottomNavbarProps {
 - Timeline de emociones recientes (últimas 24 horas)
 
 **Lógica:**
-```typescript
+\`\`\`typescript
 // Fetch recent emotions
 const [recentEmotions, setRecentEmotions] = useState<EmotionEntry[]>([])
 
@@ -1165,7 +1165,7 @@ useEffect(() => {
   
   fetchRecent()
 }, [userId])
-```
+\`\`\`
 
 ### 7.4 Vista Estadísticas: `StatsView`
 
@@ -1179,7 +1179,7 @@ useEffect(() => {
 - Botón "Ver detalles IEQ"
 
 **Métricas mostradas:**
-```typescript
+\`\`\`typescript
 interface MetricsDisplay {
   deamScore: number
   emotionalState: EmotionalStateResult
@@ -1187,7 +1187,7 @@ interface MetricsDisplay {
   streakDays: number
   topEmotion: string
 }
-```
+\`\`\`
 
 ### 7.5 Vista Registro: `RecordView`
 
@@ -1196,7 +1196,7 @@ interface MetricsDisplay {
 **Responsabilidad:** Iniciar flujo de check-in emocional.
 
 **Flujo:**
-```typescript
+\`\`\`typescript
 const [step, setStep] = useState<'picker' | 'screen' | 'flow' | 'mirror'>('picker')
 const [selectedQuadrant, setSelectedQuadrant] = useState<Quadrant | null>(null)
 const [selectedEmotion, setSelectedEmotion] = useState<string | null>(null)
@@ -1213,7 +1213,7 @@ const [emotionData, setEmotionData] = useState<EmotionData | null>(null)
 
 // Step 4: MirrorOverlay
 <MirrorOverlay emotionData={emotionData} onConfirm={handleSave} />
-```
+\`\`\`
 
 ### 7.6 Panel IEQ: `IEQPanel`
 
@@ -1230,7 +1230,7 @@ const [emotionData, setEmotionData] = useState<EmotionData | null>(null)
 6. Inercia con tiempo de recuperación
 
 **Cálculo de métricas:**
-```typescript
+\`\`\`typescript
 const [entries, setEntries] = useState<EmotionEntry[]>([])
 const [periodDays, setPeriodDays] = useState(30)
 
@@ -1260,7 +1260,7 @@ useEffect(() => {
 
   calculateMetrics()
 }, [userId, periodDays])
-```
+\`\`\`
 
 ### 7.7 Gráfico de Ondas: `IntensityWellbeingWaveChart`
 
@@ -1269,7 +1269,7 @@ useEffect(() => {
 **Responsabilidad:** Visualizar distribución de emociones en espacio 2D (intensidad x bienestar).
 
 **Lógica:**
-```typescript
+\`\`\`typescript
 // Agrupar emociones por familia de color
 const emotionsByColor = groupBy(entries, entry => getColorFamily(entry.emotion))
 
@@ -1305,7 +1305,7 @@ return (
     <text x="0" y="50" transform="rotate(-90 0 50)">Intensidad →</text>
   </svg>
 )
-```
+\`\`\`
 
 ### 7.8 Feed Social: `SocialFeed`
 
@@ -1314,7 +1314,7 @@ return (
 **Responsabilidad:** Mostrar emociones compartidas por contactos.
 
 **Lógica:**
-```typescript
+\`\`\`typescript
 const [feedItems, setFeedItems] = useState<FeedItem[]>([])
 
 useEffect(() => {
@@ -1359,7 +1359,7 @@ useEffect(() => {
 
   return () => subscription.unsubscribe()
 }, [userId])
-```
+\`\`\`
 
 ---
 
@@ -1375,7 +1375,7 @@ useEffect(() => {
 
 Calcula el estado emocional predominante (cuadrante) usando ponderación temporal.
 
-```typescript
+\`\`\`typescript
 export function calculateEmotionalState(
   entries: EmotionEntry[], 
   timeRangeDays: number
@@ -1432,13 +1432,13 @@ export function calculateEmotionalState(
     color: CATEGORY_COLORS[category]
   }
 }
-```
+\`\`\`
 
 #### 8.1.2 `calculateDEAMScore()`
 
 Calcula el score DEAM IEQ (0-100) a partir de las 5 submétricas.
 
-```typescript
+\`\`\`typescript
 export function calculateDEAMScore(
   entries: EmotionEntry[], 
   periodDays: number
@@ -1474,13 +1474,13 @@ export function calculateDEAMScore(
 
   return { score, delta }
 }
-```
+\`\`\`
 
 #### 8.1.3 `calculateInertia()`
 
 Calcula el tiempo promedio de recuperación emocional (en horas).
 
-```typescript
+\`\`\`typescript
 export function calculateInertia(entries: EmotionEntry[]): number {
   // Filtrar entradas con valencia negativa
   const negativeEntries = entries.filter(e => {
@@ -1513,13 +1513,13 @@ export function calculateInertia(entries: EmotionEntry[]): number {
 
   return recoveryCount > 0 ? totalRecoveryHours / recoveryCount : 0
 }
-```
+\`\`\`
 
 #### 8.1.4 `calculateIntensityWellbeing()`
 
 Genera datos para el gráfico de intensidad vs bienestar.
 
-```typescript
+\`\`\`typescript
 export function calculateIntensityWellbeing(entries: EmotionEntry[]): IntensityWellbeingData {
   if (entries.length === 0) {
     return {
@@ -1573,13 +1573,13 @@ export function calculateIntensityWellbeing(entries: EmotionEntry[]): IntensityW
     interpretationText
   }
 }
-```
+\`\`\`
 
 #### 8.1.5 `calculateGranularity()`
 
 Mide la granularidad emocional usando entropía de Shannon.
 
-```typescript
+\`\`\`typescript
 export function calculateGranularity(
   currentEntries: EmotionEntry[], 
   previousEntries: EmotionEntry[]
@@ -1642,13 +1642,13 @@ export function calculateGranularity(
     trendBadgeText: `${deltaPct >= 0 ? '+' : ''}${Math.round(deltaPct)}% variedad emocional funcional`
   }
 }
-```
+\`\`\`
 
 #### 8.1.6 `calculateEmotionalAwareness()`
 
 Calcula el score de conciencia emocional (CE) con 5 subdimensiones.
 
-```typescript
+\`\`\`typescript
 export function calculateEmotionalAwareness(
   currentEntries: EmotionEntry[], 
   previousEntries: EmotionEntry[], 
@@ -1780,7 +1780,7 @@ function calculateElaborativeAwareness(entry: EmotionEntry): number {
   
   return Math.min(score, 100)
 }
-```
+\`\`\`
 
 ### 8.2 Mapeo de Emociones: `emotion-mapping.ts`
 
@@ -1789,7 +1789,7 @@ function calculateElaborativeAwareness(entry: EmotionEntry): number {
 **Responsabilidad:** Mapear cada emoción del catálogo a coordenadas (valence, arousal).
 
 **Estructura de datos:**
-```typescript
+\`\`\`typescript
 export const EMOTION_TO_AXES: Record<string, EmotionAxes> = {
   // VERDE (calma)
   'Tranquilo': { valence: 0.6, arousal: -0.6 },
@@ -1819,7 +1819,7 @@ export const EMOTION_TO_AXES: Record<string, EmotionAxes> = {
 export function getEmotionAxes(emotion: string): EmotionAxes {
   return EMOTION_TO_AXES[emotion] || { valence: 0, arousal: 0 }
 }
-```
+\`\`\`
 
 ### 8.3 Datos Estáticos: `vladi-data.ts`
 
@@ -1828,7 +1828,7 @@ export function getEmotionAxes(emotion: string): EmotionAxes {
 **Responsabilidad:** Almacenar matrices de emociones, descripciones, actividades y contextos.
 
 **Estructura:**
-```typescript
+\`\`\`typescript
 export const EMOTION_MATRICES = {
   green: [
     ['Soñoliento', 'Complaciente', 'Sosegado', 'Acogido', 'Sereno'],
@@ -1907,7 +1907,7 @@ export const DEFAULT_COMPANY = [
   'Compañeros',
   'Desconocidos'
 ]
-```
+\`\`\`
 
 ---
 
@@ -1917,7 +1917,7 @@ export const DEFAULT_COMPANY = [
 
 VLADI utiliza Supabase Auth para gestionar usuarios:
 
-```
+\`\`\`
 ┌──────────────────────────────────────┐
 │  CLIENTE (Next.js)                   │
 │                                      │
@@ -1964,13 +1964,13 @@ VLADI utiliza Supabase Auth para gestionar usuarios:
 │  if (!user) redirect('/auth/login')  │
 │                                      │
 └──────────────────────────────────────┘
-```
+\`\`\`
 
 ### 9.2 Implementación de Cliente Supabase
 
 #### Cliente Browser (`lib/supabase/client.ts`)
 
-```typescript
+\`\`\`typescript
 import { createBrowserClient as createSupabaseBrowserClient } from '@supabase/ssr'
 
 export function createClient() {
@@ -1981,11 +1981,11 @@ export function createClient() {
 }
 
 export const supabase = createClient()
-```
+\`\`\`
 
 #### Cliente Server (`lib/supabase/server.ts`)
 
-```typescript
+\`\`\`typescript
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
@@ -2010,11 +2010,11 @@ export async function createClient() {
     }
   )
 }
-```
+\`\`\`
 
 #### Middleware/Proxy (`lib/supabase/proxy.ts`)
 
-```typescript
+\`\`\`typescript
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
@@ -2076,11 +2076,11 @@ export async function updateSession(request: NextRequest) {
 
   return response
 }
-```
+\`\`\`
 
 #### Configuración del Middleware (`middleware.ts`)
 
-```typescript
+\`\`\`typescript
 import { type NextRequest } from 'next/server'
 import { updateSession } from '@/lib/supabase/proxy'
 
@@ -2093,13 +2093,13 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
-```
+\`\`\`
 
 ### 9.3 Protección de Rutas
 
 #### Página Protegida (Server Component)
 
-```typescript
+\`\`\`typescript
 // app/app/page.tsx
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
@@ -2121,11 +2121,11 @@ export default async function AppPage() {
 
   return <VladiApp userId={user.id} userProfile={profile} />
 }
-```
+\`\`\`
 
 #### Componente con Auth (Client Component)
 
-```typescript
+\`\`\`typescript
 // components/example.tsx
 'use client'
 
@@ -2154,7 +2154,7 @@ export function ProtectedComponent() {
 
   return <div>Protected content for {user.email}</div>
 }
-```
+\`\`\`
 
 ### 9.4 Row Level Security (RLS)
 
@@ -2162,15 +2162,15 @@ Todas las tablas tienen políticas RLS habilitadas. Ejemplos:
 
 #### Política: Usuario solo ve sus propias entradas
 
-```sql
+\`\`\`sql
 CREATE POLICY entries_select_own ON emotion_entries
   FOR SELECT
   USING (auth.uid() = user_id);
-```
+\`\`\`
 
 #### Política: Usuario puede ver entradas compartidas con él
 
-```sql
+\`\`\`sql
 CREATE POLICY entries_select_shared ON emotion_entries
   FOR SELECT
   USING (
@@ -2182,21 +2182,21 @@ CREATE POLICY entries_select_shared ON emotion_entries
       WHERE c.user_id = auth.uid()
     )
   );
-```
+\`\`\`
 
 #### Política: Usuario solo puede insertar sus propias entradas
 
-```sql
+\`\`\`sql
 CREATE POLICY entries_insert_own ON emotion_entries
   FOR INSERT
   WITH CHECK (auth.uid() = user_id);
-```
+\`\`\`
 
 ### 9.5 Validación y Sanitización
 
 #### En el cliente (antes de enviar)
 
-```typescript
+\`\`\`typescript
 // Validar intensidad
 if (intensity < 0 || intensity > 100) {
   throw new Error('Intensidad debe estar entre 0 y 100')
@@ -2209,11 +2209,11 @@ const sanitizedNotes = notes.trim().substring(0, 500)
 if (!EMOTION_TO_AXES[emotion]) {
   throw new Error('Emoción no reconocida')
 }
-```
+\`\`\`
 
 #### En el servidor (RLS + constraints)
 
-```sql
+\`\`\`sql
 -- Constraint en tabla
 ALTER TABLE emotion_entries
 ADD CONSTRAINT intensity_range 
@@ -2223,7 +2223,7 @@ CHECK (intensity >= 0 AND intensity <= 100);
 ALTER TABLE emotion_entries
 ADD CONSTRAINT valid_quadrant 
 CHECK (quadrant IN ('green', 'yellow', 'red', 'blue'));
-```
+\`\`\`
 
 ---
 
@@ -2233,7 +2233,7 @@ CHECK (quadrant IN ('green', 'yellow', 'red', 'blue'));
 
 VLADI requiere las siguientes variables de entorno (configuradas en Vercel):
 
-```env
+\`\`\`env
 # Supabase Public
 NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
@@ -2255,7 +2255,7 @@ POSTGRES_HOST=db.xxxxx.supabase.co
 
 # Development Redirect (para testing local)
 NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL=http://localhost:3000
-```
+\`\`\`
 
 ### 10.2 Configuración del Proyecto Supabase
 
@@ -2287,7 +2287,7 @@ NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL=http://localhost:3000
 
 Ejemplo: Escuchar nuevas emociones públicas en tiempo real
 
-```typescript
+\`\`\`typescript
 const supabase = createClient()
 
 const subscription = supabase
@@ -2310,11 +2310,11 @@ const subscription = supabase
 return () => {
   subscription.unsubscribe()
 }
-```
+\`\`\`
 
 ### 10.4 Storage para Avatares
 
-```typescript
+\`\`\`typescript
 // Subir avatar
 const uploadAvatar = async (file: File, userId: string) => {
   const fileExt = file.name.split('.').pop()
@@ -2343,7 +2343,7 @@ const uploadAvatar = async (file: File, userId: string) => {
 
   return publicUrl
 }
-```
+\`\`\`
 
 ---
 
@@ -2357,7 +2357,7 @@ VLADI usa Zustand para gestionar estado global de la aplicación.
 
 **Estructura del Store:**
 
-```typescript
+\`\`\`typescript
 interface VladiState {
   // Estado del usuario
   user: User | null
@@ -2481,11 +2481,11 @@ export const useVladiStore = create<VladiState>()(
     })
   )
 )
-```
+\`\`\`
 
 ### 11.2 Uso del Store en Componentes
 
-```typescript
+\`\`\`typescript
 // Leer estado
 const { metrics, isLoadingMetrics, fetchMetrics } = useVladiStore()
 
@@ -2503,13 +2503,13 @@ return (
     <p>Estado: {metrics?.emotionalState.category}</p>
   </div>
 )
-```
+\`\`\`
 
 ### 11.3 Persistencia Local (Futuro)
 
 Para mejorar performance, se puede añadir persistencia local con `zustand/middleware`:
 
-```typescript
+\`\`\`typescript
 import { persist, createJSONStorage } from 'zustand/middleware'
 
 export const useVladiStore = create<VladiState>()(
@@ -2530,7 +2530,7 @@ export const useVladiStore = create<VladiState>()(
     )
   )
 )
-```
+\`\`\`
 
 ---
 
@@ -2540,7 +2540,7 @@ export const useVladiStore = create<VladiState>()(
 
 VLADI utiliza una paleta personalizada basada en los cuadrantes emocionales:
 
-```css
+\`\`\`css
 :root {
   /* Colores principales */
   --background: #ffffff;
@@ -2569,7 +2569,7 @@ VLADI utiliza una paleta personalizada basada en los cuadrantes emocionales:
   /* Radius */
   --radius: 1.5rem;
 }
-```
+\`\`\`
 
 ### 12.2 Tipografía
 
@@ -2589,18 +2589,18 @@ VLADI usa dos familias tipográficas:
 - **Clase Tailwind:** `font-serif`
 
 **Ejemplo:**
-```tsx
+\`\`\`tsx
 <h1 className="font-serif text-4xl italic">En calma</h1>
 <p className="font-sans text-base text-muted-foreground">
   Hoy, te has sentido mayormente calmado y tranquilo.
 </p>
-```
+\`\`\`
 
 ### 12.3 Espaciado y Layout
 
 VLADI sigue un sistema de espaciado consistente basado en múltiplos de 4px:
 
-```typescript
+\`\`\`typescript
 // Tailwind spacing scale (usado en la app)
 spacing = {
   0: '0px',
@@ -2617,7 +2617,7 @@ spacing = {
   20: '80px',
   24: '96px'
 }
-```
+\`\`\`
 
 **Convenciones:**
 - **Padding de secciones:** `p-6` (24px) en móvil, `p-8` (32px) en desktop
@@ -2648,7 +2648,7 @@ VLADI utiliza shadcn/ui, una colección de componentes basados en Radix UI y Tai
 - `Skeleton` - Loading skeletons
 
 **Ejemplo de uso:**
-```tsx
+\`\`\`tsx
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardContent } from '@/components/ui/card'
 
@@ -2661,13 +2661,13 @@ import { Card, CardHeader, CardContent } from '@/components/ui/card'
     <Button variant="outline" size="sm">Ver detalles</Button>
   </CardContent>
 </Card>
-```
+\`\`\`
 
 ### 12.5 Responsive Design
 
 VLADI es mobile-first con breakpoints estándar de Tailwind:
 
-```typescript
+\`\`\`typescript
 breakpoints = {
   sm: '640px',   // Tablets pequeñas
   md: '768px',   // Tablets
@@ -2675,7 +2675,7 @@ breakpoints = {
   xl: '1280px',  // Desktops
   '2xl': '1536px' // Desktops grandes
 }
-```
+\`\`\`
 
 **Estrategia:**
 1. Diseñar todo para móvil (320px - 768px)
@@ -2683,7 +2683,7 @@ breakpoints = {
 3. Optimizar para desktop (1024px+) con `lg:` prefix
 
 **Ejemplo:**
-```tsx
+\`\`\`tsx
 <div className="
   grid grid-cols-1        /* 1 columna en móvil */
   md:grid-cols-2          /* 2 columnas en tablet */
@@ -2694,7 +2694,7 @@ breakpoints = {
   <Card>...</Card>
   <Card>...</Card>
 </div>
-```
+\`\`\`
 
 ### 12.6 Animaciones
 
@@ -2702,7 +2702,7 @@ VLADI usa animaciones sutiles para mejorar la UX:
 
 #### Animación de expansión (Check-in completado)
 
-```css
+\`\`\`css
 @keyframes expand-circle {
   from {
     transform: scale(1);
@@ -2715,11 +2715,11 @@ VLADI usa animaciones sutiles para mejorar la UX:
 .expanding {
   animation: expand-circle 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
-```
+\`\`\`
 
 #### Animación de pulsación (Botón SOS)
 
-```css
+\`\`\`css
 @keyframes pulse-scale {
   0%, 100% {
     transform: scale(1);
@@ -2734,22 +2734,22 @@ VLADI usa animaciones sutiles para mejorar la UX:
 .pulse-icon {
   animation: pulse-scale 2s infinite ease-in-out;
 }
-```
+\`\`\`
 
 #### Transiciones
 
-```tsx
+\`\`\`tsx
 // Transiciones suaves para interacciones
 <Button className="active:scale-[0.98] transition-transform">
   Confirmar
 </Button>
-```
+\`\`\`
 
 ### 12.7 Safe Areas (iOS)
 
 Para manejar notches y áreas seguras en iOS:
 
-```css
+\`\`\`css
 .pt-safe {
   padding-top: max(16px, env(safe-area-inset-top));
 }
@@ -2757,14 +2757,14 @@ Para manejar notches y áreas seguras en iOS:
 .pb-safe {
   padding-bottom: max(16px, env(safe-area-inset-bottom));
 }
-```
+\`\`\`
 
 **Uso:**
-```tsx
+\`\`\`tsx
 <div className="min-h-screen pt-safe pb-safe">
   {/* Contenido seguro en iOS */}
 </div>
-```
+\`\`\`
 
 ---
 
@@ -2778,7 +2778,7 @@ VLADI usa Server Actions de Next.js para operaciones del servidor.
 
 #### Ejemplo: Guardar emoción
 
-```typescript
+\`\`\`typescript
 // app/actions/emotions.ts
 'use server'
 
@@ -2831,11 +2831,11 @@ export async function saveEmotion(data: {
 
   return { success: true }
 }
-```
+\`\`\`
 
 #### Uso en componente:
 
-```tsx
+\`\`\`tsx
 'use client'
 
 import { saveEmotion } from '@/app/actions/emotions'
@@ -2856,7 +2856,7 @@ const handleSaveEmotion = async () => {
     router.push('/app')
   }
 }
-```
+\`\`\`
 
 ### 13.2 API Routes
 
@@ -2864,7 +2864,7 @@ Para operaciones más complejas o endpoints públicos:
 
 #### Ejemplo: Webhook de Supabase
 
-```typescript
+\`\`\`typescript
 // app/api/webhooks/supabase/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -2900,7 +2900,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
-```
+\`\`\`
 
 ---
 
@@ -2921,7 +2921,7 @@ export async function POST(request: NextRequest) {
 
 #### Caching de métricas
 
-```typescript
+\`\`\`typescript
 // Cachear métricas calculadas en el store
 const getCachedMetrics = (userId: string, periodDays: number) => {
   const cacheKey = `metrics-${userId}-${periodDays}`
@@ -2945,11 +2945,11 @@ const setCachedMetrics = (userId: string, periodDays: number, metrics: any) => {
     timestamp: Date.now()
   }))
 }
-```
+\`\`\`
 
 #### Paginación de entradas
 
-```typescript
+\`\`\`typescript
 // Cargar entradas de forma incremental
 const fetchEntriesPaginated = async (
   userId: string, 
@@ -2965,11 +2965,11 @@ const fetchEntriesPaginated = async (
 
   return { data, error }
 }
-```
+\`\`\`
 
 #### Debouncing de cálculos
 
-```typescript
+\`\`\`typescript
 import { useMemo, useEffect } from 'react'
 import debounce from 'lodash/debounce'
 
@@ -2985,7 +2985,7 @@ const debouncedCalculateMetrics = useMemo(
 useEffect(() => {
   debouncedCalculateMetrics(entries)
 }, [entries, debouncedCalculateMetrics])
-```
+\`\`\`
 
 ---
 
@@ -2995,7 +2995,7 @@ useEffect(() => {
 
 **Archivo:** `next.config.mjs`
 
-```javascript
+\`\`\`javascript
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -3042,13 +3042,13 @@ const nextConfig = {
 }
 
 export default nextConfig
-```
+\`\`\`
 
 ### 15.2 Configuración de TypeScript
 
 **Archivo:** `tsconfig.json`
 
-```json
+\`\`\`json
 {
   "compilerOptions": {
     "target": "ES2017",
@@ -3077,16 +3077,16 @@ export default nextConfig
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": ["node_modules"]
 }
-```
+\`\`\`
 
 ### 15.3 Deployment en Vercel
 
 #### Setup inicial:
 
 1. **Conectar repositorio GitHub:**
-   ```bash
+   \`\`\`bash
    vercel link
-   ```
+   \`\`\`
 
 2. **Configurar variables de entorno en Vercel Dashboard:**
    - Project Settings → Environment Variables
@@ -3095,20 +3095,20 @@ export default nextConfig
 3. **Configurar dominios:**
    - Domains → Add Domain → `vladi.app`
    - Configurar DNS:
-     ```
+     \`\`\`
      A     @      76.76.21.21
      CNAME www    cname.vercel-dns.com
-     ```
+     \`\`\`
 
 4. **Desplegar:**
-   ```bash
+   \`\`\`bash
    git push origin main
-   ```
+   \`\`\`
    - Vercel detecta automáticamente y despliega
 
 #### Configuración de Build:
 
-```json
+\`\`\`json
 // vercel.json (opcional, para configuración avanzada)
 {
   "buildCommand": "next build",
@@ -3120,13 +3120,13 @@ export default nextConfig
     "NODE_ENV": "production"
   }
 }
-```
+\`\`\`
 
 ### 15.4 Scripts útiles
 
 **Archivo:** `package.json`
 
-```json
+\`\`\`json
 {
   "scripts": {
     "dev": "next dev",
@@ -3139,13 +3139,13 @@ export default nextConfig
     "supabase:generate-types": "supabase gen types typescript --project-id YOUR_PROJECT_ID > types/supabase.ts"
   }
 }
-```
+\`\`\`
 
 ### 15.5 Monitoreo y Analytics
 
 #### Vercel Analytics
 
-```tsx
+\`\`\`tsx
 // app/layout.tsx
 import { Analytics } from '@vercel/analytics/next'
 
@@ -3159,11 +3159,11 @@ export default function RootLayout({ children }) {
     </html>
   )
 }
-```
+\`\`\`
 
 #### Error Tracking (Sentry - futuro)
 
-```typescript
+\`\`\`typescript
 // sentry.client.config.ts
 import * as Sentry from '@sentry/nextjs'
 
@@ -3172,7 +3172,7 @@ Sentry.init({
   tracesSampleRate: 1.0,
   environment: process.env.NODE_ENV
 })
-```
+\`\`\`
 
 ---
 
@@ -3182,13 +3182,13 @@ Sentry.init({
 
 #### Unit Tests (Jest + React Testing Library)
 
-```bash
+\`\`\`bash
 npm install --save-dev jest @testing-library/react @testing-library/jest-dom
-```
+\`\`\`
 
 **Ejemplo:** Test de calculadora IEQ
 
-```typescript
+\`\`\`typescript
 // lib/__tests__/ieq-calculator.test.ts
 import { calculateDEAMScore, calculateInertia } from '../ieq-calculator'
 
@@ -3235,11 +3235,11 @@ describe('IEQ Calculator', () => {
     })
   })
 })
-```
+\`\`\`
 
 #### Component Tests
 
-```typescript
+\`\`\`typescript
 // components/__tests__/emotion-picker.test.tsx
 import { render, screen, fireEvent } from '@testing-library/react'
 import { EmotionPicker } from '../emotion-picker'
@@ -3262,11 +3262,11 @@ describe('EmotionPicker', () => {
     expect(onSelect).toHaveBeenCalledWith({ id: 'green', name: 'En calma' })
   })
 })
-```
+\`\`\`
 
 #### Integration Tests (Playwright - futuro)
 
-```typescript
+\`\`\`typescript
 // e2e/check-in-flow.spec.ts
 import { test, expect } from '@playwright/test'
 
@@ -3301,18 +3301,18 @@ test('complete emotion check-in flow', async ({ page }) => {
   // Verify success
   await expect(page.locator('text=¡Registrado!')).toBeVisible()
 })
-```
+\`\`\`
 
 ### 16.2 Debugging
 
 #### Console Logs Estructurados
 
-```typescript
+\`\`\`typescript
 // Usar [v0] prefix para logs de debugging
 console.log('[v0] User data:', userData)
 console.log('[v0] Calculating metrics for period:', periodDays)
 console.error('[v0] Error in IEQ calculation:', error)
-```
+\`\`\`
 
 #### React DevTools
 
@@ -3412,13 +3412,13 @@ Si vas a trabajar en VLADI, necesitarás:
    - Variables de entorno
 
 2. **Setup local:**
-   ```bash
+   \`\`\`bash
    git clone <repo>
    npm install
    cp .env.example .env.local
    # Configurar variables de entorno
    npm run dev
-   ```
+   \`\`\`
 
 3. **Documentación de API:**
    - Ver `lib/` para toda la lógica de negocio
@@ -3426,7 +3426,7 @@ Si vas a trabajar en VLADI, necesitarás:
    - Ver esquemas de DB en sección 4
 
 4. **Convenciones de commits:**
-   ```
+   \`\`\`
    feat: Add new emotion tracking feature
    fix: Fix DEAM score calculation bug
    docs: Update API documentation
@@ -3434,7 +3434,7 @@ Si vas a trabajar en VLADI, necesitarás:
    refactor: Restructure IEQ calculator
    test: Add tests for granularity calculation
    chore: Update dependencies
-   ```
+   \`\`\`
 
 ---
 

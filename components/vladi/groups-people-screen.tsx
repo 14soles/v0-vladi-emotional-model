@@ -55,6 +55,15 @@ interface GroupMember {
   isAdmin?: boolean
 }
 
+interface PendingGroupInvitation {
+  id: string
+  to_user_id: string
+  username?: string
+  display_name?: string | null
+  avatar_url?: string | null
+  created_at: string
+}
+
 type ViewState = "main" | "group-detail" | "add-members"
 
 export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps) {
@@ -73,7 +82,9 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
   // Group detail state
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null)
   const [groupMembers, setGroupMembers] = useState<GroupMember[]>([])
+  const [pendingInvitations, setPendingInvitations] = useState<PendingGroupInvitation[]>([])
   const [loadingMembers, setLoadingMembers] = useState(false)
+  const [cancellingInvitation, setCancellingInvitation] = useState<string | null>(null)
   
   // Add members state
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set())
@@ -495,8 +506,10 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
     setSelectedGroup(group)
     setViewState("group-detail")
     setLoadingMembers(true)
+    setPendingInvitations([])
 
     try {
+      // Load group members
       const { data: membersData } = await supabase
         .from("group_members")
         .select("id, contact_id")
@@ -535,6 +548,36 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
         setGroupMembers(members)
       } else {
         setGroupMembers([])
+      }
+
+      // Load pending invitations for this group
+      const { data: invitationsData } = await supabase
+        .from("group_invitations")
+        .select("id, to_user_id, created_at")
+        .eq("group_id", group.id)
+        .eq("status", "pending")
+
+      if (invitationsData && invitationsData.length > 0) {
+        const toUserIds = invitationsData.map((i) => i.to_user_id)
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, username, display_name, avatar_url")
+          .in("id", toUserIds)
+        
+        const profileMap = new Map(profiles?.map((p) => [p.id, p]) || [])
+        
+        const pendingInvites: PendingGroupInvitation[] = invitationsData.map((inv) => {
+          const profile = profileMap.get(inv.to_user_id)
+          return {
+            id: inv.id,
+            to_user_id: inv.to_user_id,
+            username: profile?.username,
+            display_name: profile?.display_name,
+            avatar_url: profile?.avatar_url,
+            created_at: inv.created_at,
+          }
+        })
+        setPendingInvitations(pendingInvites)
       }
     } catch (error) {
       handleError(error, "error", {
@@ -592,9 +635,9 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
         if (error) throw error
       }
 
-      // Go back to group detail
-      setViewState("group-detail")
+      // Go back to group detail and reload data
       setSelectedContacts(new Set())
+      await openGroupDetail(selectedGroup)
     } catch (error) {
       handleError(error, "error", {
         userId,
@@ -603,6 +646,21 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
       })
     }
     setAddingMembers(false)
+  }
+
+  const cancelGroupInvitation = async (invitationId: string) => {
+    setCancellingInvitation(invitationId)
+    try {
+      await supabase.from("group_invitations").delete().eq("id", invitationId)
+      setPendingInvitations((prev) => prev.filter((i) => i.id !== invitationId))
+    } catch (error) {
+      handleError(error, "error", {
+        userId,
+        action: "cancel_group_invitation",
+        component: "GroupsPeopleScreen",
+      })
+    }
+    setCancellingInvitation(null)
   }
 
   const removeMemberFromGroup = async (member: GroupMember) => {
@@ -656,9 +714,11 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
     setDeletingGroup(false)
   }
 
-  // Filter contacts not already in group for add members view
+  // Filter contacts not already in group and not already with pending invitations for add members view
+  const pendingInvitedUserIds = new Set(pendingInvitations.map((i) => i.to_user_id))
   const availableContacts = contacts.filter(
-    (c) => !groupMembers.some((m) => m.contact_id === c.id)
+    (c) => !groupMembers.some((m) => m.contact_id === c.id) && 
+           !pendingInvitedUserIds.has(c.contact_user_id || "")
   )
 
   const filteredAvailableContacts = availableContacts.filter(
@@ -682,7 +742,7 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
             Cancelar
           </button>
           <div className="text-center">
-            <h2 className="text-base font-semibold text-gray-900">Invitar al grupo</h2>
+            <h2 className="text-base font-semibold text-gray-900">Agregar al grupo</h2>
             <p className="text-xs text-gray-500">{selectedContacts.size} seleccionados</p>
           </div>
           <button
@@ -690,7 +750,7 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
             disabled={selectedContacts.size === 0 || addingMembers}
             className="text-base font-medium text-gray-900 disabled:text-gray-300"
           >
-            {addingMembers ? <Loader2 className="w-5 h-5 animate-spin" /> : "Invitar"}
+            {addingMembers ? <Loader2 className="w-5 h-5 animate-spin" /> : "Agregar"}
           </button>
         </div>
 
@@ -829,6 +889,9 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
         <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100">
           <p className="text-sm font-medium text-gray-900">
             {groupMembers.length} miembro{groupMembers.length !== 1 ? "s" : ""}
+            {pendingInvitations.length > 0 && (
+              <span className="text-gray-500"> ({pendingInvitations.length} pendiente{pendingInvitations.length !== 1 ? "s" : ""})</span>
+            )}
           </p>
           <button className="p-2 -mr-2">
             <Search className="w-5 h-5 text-gray-600" />
@@ -845,51 +908,111 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
             <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
               <Plus className="w-5 h-5 text-gray-600" />
             </div>
-            <span className="font-medium text-gray-900">Anadir miembros</span>
+            <span className="font-medium text-gray-900">Agregar personas</span>
           </button>
+
+          {/* Pending invitations section */}
+          {pendingInvitations.length > 0 && (
+            <div className="border-b border-gray-100">
+              <div className="px-4 py-2 bg-gray-50">
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  Invitaciones pendientes
+                </p>
+              </div>
+              {pendingInvitations.map((invitation) => (
+                <div
+                  key={invitation.id}
+                  className="flex items-center gap-3 px-4 py-3 bg-amber-50/50 border-b border-gray-100"
+                >
+                  <div className="w-12 h-12 rounded-full bg-gray-200 overflow-hidden">
+                    {invitation.avatar_url ? (
+                      <img
+                        src={invitation.avatar_url || "/placeholder.svg"}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-500 text-lg font-medium">
+                        {(invitation.display_name || invitation.username || "U")[0].toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">
+                      {invitation.display_name || invitation.username || "Usuario"}
+                    </p>
+                    {invitation.username && (
+                      <p className="text-xs text-gray-500">@{invitation.username}</p>
+                    )}
+                    <p className="text-xs text-amber-600 mt-0.5">Pendiente de aceptar</p>
+                  </div>
+                  <button
+                    onClick={() => cancelGroupInvitation(invitation.id)}
+                    disabled={cancellingInvitation === invitation.id}
+                    className="p-2 hover:bg-gray-100 rounded-full"
+                  >
+                    {cancellingInvitation === invitation.id ? (
+                      <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
+                    ) : (
+                      <X className="w-5 h-5 text-gray-400" />
+                    )}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Members list */}
           {loadingMembers ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
             </div>
-          ) : groupMembers.length === 0 ? (
+          ) : groupMembers.length === 0 && pendingInvitations.length === 0 ? (
             <div className="text-center py-12 px-4">
               <p className="text-gray-500">Este grupo no tiene miembros</p>
               <p className="text-sm text-gray-400 mt-1">Anade personas de tus contactos</p>
             </div>
           ) : (
-            groupMembers.map((member) => (
-              <div
-                key={member.id}
-                className="flex items-center gap-3 px-4 py-3 border-b border-gray-100"
-              >
-                <div className="w-12 h-12 rounded-full bg-gray-200 overflow-hidden">
-                  {member.avatar_url ? (
-                    <img
-                      src={member.avatar_url || "/placeholder.svg"}
-                      alt=""
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-500 text-lg font-medium">
-                      {member.contact_name[0].toUpperCase()}
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium text-gray-900">
-                    {member.username || member.contact_name}
+            <>
+              {groupMembers.length > 0 && (
+                <div className="px-4 py-2 bg-gray-50">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                    Miembros
                   </p>
                 </div>
-                <button
-                  onClick={() => removeMemberFromGroup(member)}
-                  className="p-2 hover:bg-gray-100 rounded-full"
+              )}
+              {groupMembers.map((member) => (
+                <div
+                  key={member.id}
+                  className="flex items-center gap-3 px-4 py-3 border-b border-gray-100"
                 >
-                  <X className="w-5 h-5 text-gray-400" />
-                </button>
-              </div>
-            ))
+                  <div className="w-12 h-12 rounded-full bg-gray-200 overflow-hidden">
+                    {member.avatar_url ? (
+                      <img
+                        src={member.avatar_url || "/placeholder.svg"}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-500 text-lg font-medium">
+                        {member.contact_name[0].toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">
+                      {member.username || member.contact_name}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => removeMemberFromGroup(member)}
+                    className="px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    Quitar del grupo
+                  </button>
+                </div>
+              ))}
+            </>
           )}
         </div>
       </div>

@@ -119,7 +119,7 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
           .not("intensity", "is", null)
           .order("created_at", { ascending: false })
           .limit(1)
-          .single()
+          .maybeSingle()
 
         if (!error && data?.intensity && mounted) {
           setLastUserIntensity(data.intensity)

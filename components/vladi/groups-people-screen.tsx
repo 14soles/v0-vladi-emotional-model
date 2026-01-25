@@ -550,11 +550,12 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
         setGroupMembers([])
       }
 
-      // Load pending invitations for this group
+      // Load pending invitations for this group (sent by current user)
       const { data: invitationsData } = await supabase
         .from("group_invitations")
         .select("id, to_user_id, created_at")
         .eq("group_id", group.id)
+        .eq("from_user_id", userId)
         .eq("status", "pending")
 
       if (invitationsData && invitationsData.length > 0) {
@@ -578,6 +579,8 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
           }
         })
         setPendingInvitations(pendingInvites)
+      } else {
+        setPendingInvitations([])
       }
     } catch (error) {
       handleError(error, "error", {
@@ -609,14 +612,14 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
 
   const addSelectedMembers = async () => {
     if (!selectedGroup || selectedContacts.size === 0) return
-
+    
     setAddingMembers(true)
     try {
       // Get the contact_user_id for each selected contact
       const selectedContactsList = contacts.filter(c => selectedContacts.has(c.id))
       
       // Send group invitations instead of adding directly
-      const invitations = selectedContactsList
+      const invitationsToSend = selectedContactsList
         .filter(c => c.contact_user_id) // Only contacts with user accounts
         .map((contact) => ({
           group_id: selectedGroup.id,
@@ -624,17 +627,42 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
           to_user_id: contact.contact_user_id,
           status: "pending",
         }))
-
-      if (invitations.length > 0) {
-        // Insert invitations (ignore conflicts if already invited)
-        const { error } = await supabase.from("group_invitations").upsert(
-          invitations,
-          { onConflict: "group_id,to_user_id", ignoreDuplicates: true }
-        )
-        
-        if (error) throw error
+      
+      if (invitationsToSend.length > 0) {
+        // Insert invitations one by one to handle conflicts properly
+        for (const invitation of invitationsToSend) {
+          // First check if invitation already exists
+          const { data: existing } = await supabase
+            .from("group_invitations")
+            .select("id, status")
+            .eq("group_id", invitation.group_id)
+            .eq("to_user_id", invitation.to_user_id)
+            .maybeSingle()
+          
+          if (!existing) {
+            // Insert new invitation
+            const { error: insertError } = await supabase
+              .from("group_invitations")
+              .insert(invitation)
+            
+            if (insertError) {
+              console.error("[v0] Error inserting invitation:", insertError)
+            }
+          } else if (existing.status === "rejected") {
+            // Re-invite if previously rejected
+            const { error: updateError } = await supabase
+              .from("group_invitations")
+              .update({ status: "pending", created_at: new Date().toISOString(), responded_at: null })
+              .eq("id", existing.id)
+            
+            if (updateError) {
+              console.error("[v0] Error updating invitation:", updateError)
+            }
+          }
+          // If pending or accepted, do nothing
+        }
       }
-
+      
       // Go back to group detail and reload data
       setSelectedContacts(new Set())
       await openGroupDetail(selectedGroup)

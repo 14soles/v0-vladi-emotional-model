@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { X, UserPlus, Users, Check, XIcon, Bell, RefreshCw } from "lucide-react"
+import { X, UserPlus, Users, Check, XIcon, Bell, RefreshCw, UserCheck } from "lucide-react"
 import { supabase } from "@/lib/supabase/client"
 import Image from "next/image"
 
@@ -47,9 +47,26 @@ interface GroupInvitation {
   } | null
 }
 
+interface AcceptanceNotification {
+  id: string
+  notification_type: "friend_accepted" | "group_accepted"
+  from_user_id: string
+  group_id?: string
+  group_name?: string
+  created_at: string
+  is_read: boolean
+  from_user: {
+    id: string
+    display_name: string | null
+    username: string | null
+    avatar_url: string | null
+  } | null
+}
+
 export function NotificationsView({ onClose, userId, onNotificationCountChange }: NotificationsViewProps) {
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([])
   const [groupInvitations, setGroupInvitations] = useState<GroupInvitation[]>([])
+  const [acceptanceNotifications, setAcceptanceNotifications] = useState<AcceptanceNotification[]>([])
   const [loading, setLoading] = useState(true)
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -137,7 +154,41 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
         setGroupInvitations(transformedInvitations)
       }
 
-      // Update notification count in parent
+      // Load acceptance notifications (unread only for actionable count, but show all recent)
+      const { data: acceptances, error: acceptancesError } = await supabase
+        .from("acceptance_notifications")
+        .select("id, notification_type, from_user_id, group_id, group_name, created_at, is_read")
+        .eq("to_user_id", userId)
+        .eq("is_read", false)
+        .order("created_at", { ascending: false })
+        .limit(20)
+
+      if (acceptancesError) {
+        console.error("[v0] Error loading acceptance notifications:", acceptancesError)
+      } else if (mountedRef.current && acceptances && acceptances.length > 0) {
+        const fromUserIds = acceptances.map(a => a.from_user_id)
+        let profileMap = new Map()
+        
+        if (fromUserIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from("profiles")
+            .select("id, display_name, username, avatar_url")
+            .in("id", fromUserIds)
+          
+          profileMap = new Map(profiles?.map(p => [p.id, p]) || [])
+        }
+        
+        const transformedAcceptances = acceptances.map(a => ({
+          ...a,
+          notification_type: a.notification_type as "friend_accepted" | "group_accepted",
+          from_user: profileMap.get(a.from_user_id) || null
+        }))
+        setAcceptanceNotifications(transformedAcceptances)
+      } else if (mountedRef.current) {
+        setAcceptanceNotifications([])
+      }
+
+      // Update notification count in parent (only count actionable items: friend requests + group invitations)
       if (mountedRef.current) {
         const totalCount = (requests?.length || 0) + (invitations?.length || 0)
         onNotificationCountChange?.(totalCount)
@@ -271,6 +322,15 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
         }
       }
 
+      // 6. Create acceptance notification for the original requester
+      await supabase
+        .from("acceptance_notifications")
+        .insert({
+          notification_type: "friend_accepted",
+          from_user_id: userId,
+          to_user_id: request.from_user_id,
+        })
+
       // Remove from list and update count
       setFriendRequests(prev => {
         const newRequests = prev.filter(r => r.id !== request.id)
@@ -338,6 +398,17 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
           }, { onConflict: "group_id,contact_id" })
       }
 
+      // 4. Create acceptance notification for the group owner (who sent the invitation)
+      await supabase
+        .from("acceptance_notifications")
+        .insert({
+          notification_type: "group_accepted",
+          from_user_id: userId,
+          to_user_id: invitation.from_user_id,
+          group_id: invitation.group_id,
+          group_name: invitation.group?.name || "grupo",
+        })
+
       // Remove from list and update count
       setGroupInvitations(prev => {
         const newInvitations = prev.filter(i => i.id !== invitation.id)
@@ -389,7 +460,21 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
     return date.toLocaleDateString("es-ES", { day: "numeric", month: "short" })
   }
 
-  const hasNotifications = friendRequests.length > 0 || groupInvitations.length > 0
+  // Mark acceptance notification as read
+  const markAcceptanceAsRead = useCallback(async (notificationId: string) => {
+    try {
+      await supabase
+        .from("acceptance_notifications")
+        .update({ is_read: true })
+        .eq("id", notificationId)
+      
+      setAcceptanceNotifications(prev => prev.filter(n => n.id !== notificationId))
+    } catch (error) {
+      console.error("[v0] Error marking notification as read:", error)
+    }
+  }, [])
+
+  const hasNotifications = friendRequests.length > 0 || groupInvitations.length > 0 || acceptanceNotifications.length > 0
 
   return (
     <div className="flex flex-col h-full bg-white">
@@ -548,6 +633,57 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
                         <span>Rechazar</span>
                       </button>
                     </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* Acceptance Notifications */}
+            {acceptanceNotifications.map(notification => (
+              <div key={notification.id} className="p-4 bg-green-50/50">
+                <div className="flex items-start gap-3">
+                  <div className="relative">
+                    <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200 shrink-0">
+                      {notification.from_user?.avatar_url ? (
+                        <Image
+                          src={notification.from_user.avatar_url || "/placeholder.svg"}
+                          alt={notification.from_user.display_name || "Usuario"}
+                          width={48}
+                          height={48}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-500 font-medium text-lg">
+                          {(notification.from_user?.display_name || notification.from_user?.username || "U")[0].toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                      <UserCheck className="w-3 h-3 text-white" />
+                    </div>
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-900">
+                      <span className="font-semibold">
+                        {notification.from_user?.display_name || notification.from_user?.username || "Usuario"}
+                      </span>
+                      {notification.notification_type === "friend_accepted" 
+                        ? " ha aceptado tu solicitud de amistad"
+                        : ` ha aceptado unirse a tu grupo "${notification.group_name}"`
+                      }
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      @{notification.from_user?.username || "usuario"} · {formatRelativeTime(notification.created_at)}
+                    </p>
+                    
+                    {/* Dismiss button */}
+                    <button
+                      onClick={() => markAcceptanceAsRead(notification.id)}
+                      className="mt-2 text-xs text-gray-500 hover:text-gray-700"
+                    >
+                      Marcar como leido
+                    </button>
                   </div>
                 </div>
               </div>

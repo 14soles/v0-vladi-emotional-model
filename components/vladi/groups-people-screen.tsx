@@ -82,6 +82,10 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
   // Dropdown state for contact actions
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  
+  // Delete group confirmation
+  const [showDeleteGroupConfirm, setShowDeleteGroupConfirm] = useState(false)
+  const [deletingGroup, setDeletingGroup] = useState(false)
 
   // Load data on mount
   useEffect(() => {
@@ -273,49 +277,30 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
 
     setSendingRequest(targetUserId)
     try {
-      // Check if a friend request already exists
-      const { data: existingRequest, error: checkError } = await supabase
-        .from("friend_requests")
-        .select("id, status")
-        .or(`and(from_user_id.eq.${userId},to_user_id.eq.${targetUserId}),and(from_user_id.eq.${targetUserId},to_user_id.eq.${userId})`)
+      // Check if there's already an active contact/friendship
+      const { data: activeContact } = await supabase
+        .from("contacts")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("contact_user_id", targetUserId)
+        .eq("friendship_status", "accepted")
         .maybeSingle()
-
-      if (checkError) {
-        console.error("[v0] sendFriendRequest: Error checking existing request", checkError)
+      
+      if (activeContact) {
+        // They're already friends - update UI
+        setSearchResults((prev) => prev.map((r) => (r.id === targetUserId ? { ...r, isFriend: true, isPending: false } : r)))
+        setSendingRequest(null)
+        return
       }
 
-      if (existingRequest) {
-        // Handle based on the existing request status
-        if (existingRequest.status === "accepted") {
-          // Check if there's actually an active contact/friendship
-          const { data: activeContact } = await supabase
-            .from("contacts")
-            .select("id")
-            .eq("user_id", userId)
-            .eq("contact_user_id", targetUserId)
-            .eq("friendship_status", "accepted")
-            .maybeSingle()
-          
-          if (activeContact) {
-            // They're actually friends - update UI to show as friend
-            setSearchResults((prev) => prev.map((r) => (r.id === targetUserId ? { ...r, isFriend: true, isPending: false } : r)))
-            setSendingRequest(null)
-            return
-          }
-          // If no active contact, the friendship was broken - delete old request and create new one
-          await supabase.from("friend_requests").delete().eq("id", existingRequest.id)
-        } else if (existingRequest.status === "pending") {
-          // Request already pending - update UI to show pending
-          setSearchResults((prev) => prev.map((r) => (r.id === targetUserId ? { ...r, isPending: true } : r)))
-          setSendingRequest(null)
-          return
-        } else if (existingRequest.status === "rejected") {
-          // If status is "rejected", we allow creating a new request - delete the old one first
-          await supabase.from("friend_requests").delete().eq("id", existingRequest.id)
-        }
-      }
+      // Delete any existing friend requests between these users (in both directions)
+      // This handles accepted, rejected, or stale pending requests
+      await supabase
+        .from("friend_requests")
+        .delete()
+        .or(`and(from_user_id.eq.${userId},to_user_id.eq.${targetUserId}),and(from_user_id.eq.${targetUserId},to_user_id.eq.${userId})`)
 
-      // Create the friend request
+      // Create a new friend request
       const { error: requestError } = await supabase.from("friend_requests").insert({
         from_user_id: userId,
         to_user_id: targetUserId,
@@ -324,8 +309,8 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
 
       if (requestError) throw requestError
 
-      // Create a contact entry to track this relationship
-      const { error: contactError } = await supabase.from("contacts").upsert(
+      // Create/update a contact entry to track this relationship
+      await supabase.from("contacts").upsert(
         {
           user_id: userId,
           contact_user_id: targetUserId,
@@ -334,11 +319,6 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
         },
         { onConflict: "user_id,contact_user_id" }
       )
-
-      if (contactError) {
-        console.error("[v0] Error creating contact:", contactError)
-        // Don't throw - the friend request was already created
-      }
 
       // Update UI to show as pending
       setSearchResults((prev) => prev.map((r) => (r.id === targetUserId ? { ...r, isPending: true } : r)))
@@ -630,6 +610,35 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
     }
   }
 
+  const deleteGroup = async () => {
+    if (!selectedGroup || selectedGroup.is_system) return
+
+    setDeletingGroup(true)
+    try {
+      // First delete all group members
+      await supabase.from("group_members").delete().eq("group_id", selectedGroup.id)
+      
+      // Delete any pending invitations
+      await supabase.from("group_invitations").delete().eq("group_id", selectedGroup.id)
+      
+      // Delete the group
+      await supabase.from("privacy_groups").delete().eq("id", selectedGroup.id)
+      
+      // Update local state
+      setGroups((prev) => prev.filter((g) => g.id !== selectedGroup.id))
+      setShowDeleteGroupConfirm(false)
+      setSelectedGroup(null)
+      setViewState("main")
+    } catch (error) {
+      handleError(error, "error", {
+        userId,
+        action: "delete_group",
+        component: "GroupsPeopleScreen",
+      })
+    }
+    setDeletingGroup(false)
+  }
+
   // Filter contacts not already in group for add members view
   const availableContacts = contacts.filter(
     (c) => !groupMembers.some((m) => m.contact_id === c.id)
@@ -747,13 +756,56 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
   if (viewState === "group-detail" && selectedGroup) {
     return (
       <div className="fixed inset-0 z-[200] bg-white flex flex-col">
+        {/* Delete Group Confirmation Modal */}
+        {showDeleteGroupConfirm && (
+          <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50">
+            <div className="bg-white rounded-xl p-6 mx-4 max-w-sm w-full shadow-xl">
+              <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
+                Desea eliminar grupo?
+              </h3>
+              <p className="text-sm text-gray-500 text-center mb-6">
+                Esta accion no se puede deshacer. Se eliminaran todos los miembros del grupo.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDeleteGroupConfirm(false)}
+                  disabled={deletingGroup}
+                  className="flex-1 py-2.5 px-4 rounded-lg border border-gray-200 text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={deleteGroup}
+                  disabled={deletingGroup}
+                  className="flex-1 py-2.5 px-4 rounded-lg bg-red-500 text-white font-medium hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {deletingGroup ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Aceptar"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center justify-between px-4 pt-[max(16px,env(safe-area-inset-top))] pb-3 border-b border-gray-100">
           <button onClick={() => setViewState("main")} className="p-2 -ml-2">
             <ChevronLeft className="w-6 h-6 text-gray-800" />
           </button>
           <h2 className="text-lg font-semibold text-gray-900">{selectedGroup.name}</h2>
-          <div className="w-10" />
+          {!selectedGroup.is_system ? (
+            <button 
+              onClick={() => setShowDeleteGroupConfirm(true)}
+              className="p-2 -mr-2 text-gray-500 hover:text-red-500 transition-colors"
+            >
+              <Trash2 className="w-5 h-5" />
+            </button>
+          ) : (
+            <div className="w-10" />
+          )}
         </div>
 
         {/* Member count and search */}

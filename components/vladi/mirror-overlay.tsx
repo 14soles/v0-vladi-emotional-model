@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react"
 import { X, Brain, Play, MessageCircle } from "lucide-react"
 import type { EmotionData } from "./emotion-screen"
+import { type InterventionType, INTERVENTIONS } from "@/lib/types/telemetry"
+import { getTopIntervention, emotionDataToState, getEmotionFamily } from "@/lib/intervention-recommender"
 
 interface MirrorOverlayProps {
   emotionData: EmotionData
@@ -13,12 +15,23 @@ interface MirrorOverlayProps {
   certainty?: string
   onClose: () => void
   onStartChat?: () => void
+  onStartIntervention?: (interventionType: InterventionType, linkedEmotion: LinkedEmotionContext) => void
+}
+
+// Context of the emotion linked to an intervention
+export interface LinkedEmotionContext {
+  emotion: string
+  emotionFamily: string
+  intensity: number
+  wellbeing: number
+  timestamp: string
 }
 
 interface ActivitySuggestion {
   title: string
   type: string
   time: string
+  interventionType?: InterventionType
 }
 
 interface MirrorResult {
@@ -35,6 +48,7 @@ export function MirrorOverlay({
   certainty,
   onClose,
   onStartChat,
+  onStartIntervention,
 }: MirrorOverlayProps) {
   const [loading, setLoading] = useState(true)
   const [result, setResult] = useState<MirrorResult | null>(null)
@@ -85,24 +99,45 @@ export function MirrorOverlay({
         ])
 
         const mirrorData = await mirrorResponse.json()
-        const suggestionData = await suggestionResponse.json()
+
+        // Use the intelligent recommendation engine based on valence/arousal/intensity
+        const emotionState = emotionDataToState({
+          emotion: emotionData.emotion,
+          quadrant: emotionData.quadrant,
+          energy: emotionData.energy,
+          pleasantness: emotionData.pleasantness,
+          intensity: emotionData.intensity, // Self-reported intensity (1-10)
+        })
+        
+        const recommendedIntervention = getTopIntervention(emotionState)
 
         setResult({
           text: mirrorData.text,
           suggestion: {
-            title: suggestionData.text,
+            title: recommendedIntervention.name,
             type: "DEAM EQ",
-            time: "5-10 min",
+            time: `${Math.floor(recommendedIntervention.duration_seconds / 60)} min`,
+            interventionType: recommendedIntervention.type,
           },
         })
       } catch {
-        // Fallback if mirror generation fails
+        // Fallback if mirror generation fails - still use smart recommendation
+        const emotionState = emotionDataToState({
+          emotion: emotionData.emotion,
+          quadrant: emotionData.quadrant,
+          energy: emotionData.energy,
+          pleasantness: emotionData.pleasantness,
+          intensity: emotionData.intensity,
+        })
+        const recommendedIntervention = getTopIntervention(emotionState)
+        
         setResult({
           text: "Gracias por compartir tus emociones. Tu registro me ayuda a comprenderte mejor.",
           suggestion: {
-            title: "Tómate un momento para reflexionar",
+            title: recommendedIntervention.name,
             type: "DEAM EQ",
-            time: "5 min",
+            time: `${Math.floor(recommendedIntervention.duration_seconds / 60)} min`,
+            interventionType: recommendedIntervention.type,
           },
         })
       } finally {
@@ -149,7 +184,20 @@ export function MirrorOverlay({
           <p className="text-sm sm:text-base text-gray-600 leading-relaxed mb-6 sm:mb-8 px-2">{result?.text}</p>
 
           {result?.suggestion && (
-            <button className="bg-gray-100 border border-gray-200 rounded-full py-3 px-5 w-full max-w-xs flex items-center justify-between mb-4 hover:bg-gray-200 transition-colors active:scale-[0.98] touch-manipulation">
+            <button 
+              onClick={() => {
+                if (result.suggestion?.interventionType && onStartIntervention) {
+                  onStartIntervention(result.suggestion.interventionType, {
+                    emotion: emotionData.emotion,
+                    emotionFamily: getEmotionFamily(emotionData.emotion, emotionData.quadrant),
+                    intensity: emotionData.intensity, // Self-reported intensity (1-10)
+                    wellbeing: emotionData.pleasantness,
+                    timestamp: new Date().toISOString(),
+                  })
+                }
+              }}
+              className="bg-gray-100 border border-gray-200 rounded-full py-3 px-5 w-full max-w-xs flex items-center justify-between mb-4 hover:bg-gray-200 transition-colors active:scale-[0.98] touch-manipulation"
+            >
               <div className="flex flex-col items-start text-left">
                 <span className="text-[9px] sm:text-[10px] uppercase text-gray-500 font-semibold tracking-wider mb-0.5">
                   Sugerencia - {result.suggestion.type}

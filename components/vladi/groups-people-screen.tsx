@@ -267,30 +267,43 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
   }
 
   const sendFriendRequest = async (targetUserId: string, targetUsername: string) => {
-    if (!userId) return
+    if (!userId) {
+      console.log("[v0] sendFriendRequest: No userId, returning")
+      return
+    }
 
+    console.log("[v0] sendFriendRequest: Starting for", targetUserId, targetUsername)
     setSendingRequest(targetUserId)
     try {
       // Check if a friend request already exists
-      const { data: existingRequest } = await supabase
+      const { data: existingRequest, error: checkError } = await supabase
         .from("friend_requests")
         .select("id, status")
         .or(`and(from_user_id.eq.${userId},to_user_id.eq.${targetUserId}),and(from_user_id.eq.${targetUserId},to_user_id.eq.${userId})`)
         .maybeSingle()
 
+      console.log("[v0] sendFriendRequest: Check result", { existingRequest, checkError })
+
+      if (checkError) {
+        console.error("[v0] sendFriendRequest: Error checking existing request", checkError)
+      }
+
       if (existingRequest) {
-        // Request already exists
+        // Request already exists - mark as pending and exit gracefully
         setSearchResults((prev) => prev.map((r) => (r.id === targetUserId ? { ...r, isPending: true } : r)))
+        setSendingRequest(null)
         return
       }
 
       // Create the friend request
+      console.log("[v0] sendFriendRequest: Creating friend request")
       const { error: requestError } = await supabase.from("friend_requests").insert({
         from_user_id: userId,
         to_user_id: targetUserId,
         status: "pending",
       })
 
+      console.log("[v0] sendFriendRequest: Insert result", { requestError })
       if (requestError) throw requestError
 
       // Create a contact entry to track this relationship
@@ -309,8 +322,10 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
         // Don't throw - the friend request was already created
       }
 
+      console.log("[v0] sendFriendRequest: Success, updating UI")
       setSearchResults((prev) => prev.map((r) => (r.id === targetUserId ? { ...r, isPending: true } : r)))
     } catch (error) {
+      console.error("[v0] sendFriendRequest: Error caught", error)
       handleError(error, "error", {
         userId,
         action: "send_friend_request",

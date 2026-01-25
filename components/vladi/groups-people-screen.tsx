@@ -268,11 +268,9 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
 
   const sendFriendRequest = async (targetUserId: string, targetUsername: string) => {
     if (!userId) {
-      console.log("[v0] sendFriendRequest: No userId, returning")
       return
     }
 
-    console.log("[v0] sendFriendRequest: Starting for", targetUserId, targetUsername)
     setSendingRequest(targetUserId)
     try {
       // Check if a friend request already exists
@@ -282,28 +280,48 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
         .or(`and(from_user_id.eq.${userId},to_user_id.eq.${targetUserId}),and(from_user_id.eq.${targetUserId},to_user_id.eq.${userId})`)
         .maybeSingle()
 
-      console.log("[v0] sendFriendRequest: Check result", { existingRequest, checkError })
-
       if (checkError) {
         console.error("[v0] sendFriendRequest: Error checking existing request", checkError)
       }
 
       if (existingRequest) {
-        // Request already exists - mark as pending and exit gracefully
-        setSearchResults((prev) => prev.map((r) => (r.id === targetUserId ? { ...r, isPending: true } : r)))
-        setSendingRequest(null)
-        return
+        // Handle based on the existing request status
+        if (existingRequest.status === "accepted") {
+          // Check if there's actually an active contact/friendship
+          const { data: activeContact } = await supabase
+            .from("contacts")
+            .select("id")
+            .eq("user_id", userId)
+            .eq("contact_user_id", targetUserId)
+            .eq("friendship_status", "accepted")
+            .maybeSingle()
+          
+          if (activeContact) {
+            // They're actually friends - update UI to show as friend
+            setSearchResults((prev) => prev.map((r) => (r.id === targetUserId ? { ...r, isFriend: true, isPending: false } : r)))
+            setSendingRequest(null)
+            return
+          }
+          // If no active contact, the friendship was broken - delete old request and create new one
+          await supabase.from("friend_requests").delete().eq("id", existingRequest.id)
+        } else if (existingRequest.status === "pending") {
+          // Request already pending - update UI to show pending
+          setSearchResults((prev) => prev.map((r) => (r.id === targetUserId ? { ...r, isPending: true } : r)))
+          setSendingRequest(null)
+          return
+        } else if (existingRequest.status === "rejected") {
+          // If status is "rejected", we allow creating a new request - delete the old one first
+          await supabase.from("friend_requests").delete().eq("id", existingRequest.id)
+        }
       }
 
       // Create the friend request
-      console.log("[v0] sendFriendRequest: Creating friend request")
       const { error: requestError } = await supabase.from("friend_requests").insert({
         from_user_id: userId,
         to_user_id: targetUserId,
         status: "pending",
       })
 
-      console.log("[v0] sendFriendRequest: Insert result", { requestError })
       if (requestError) throw requestError
 
       // Create a contact entry to track this relationship
@@ -322,7 +340,7 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
         // Don't throw - the friend request was already created
       }
 
-      console.log("[v0] sendFriendRequest: Success, updating UI")
+      // Update UI to show as pending
       setSearchResults((prev) => prev.map((r) => (r.id === targetUserId ? { ...r, isPending: true } : r)))
     } catch (error) {
       console.error("[v0] sendFriendRequest: Error caught", error)
@@ -433,6 +451,10 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
       
       // 4. Delete their contact entry (mutual removal)
       await supabase.from("contacts").delete().eq("user_id", contact.contact_user_id).eq("contact_user_id", userId)
+      
+      // 5. Delete the friend request so they can add each other again
+      await supabase.from("friend_requests").delete()
+        .or(`and(from_user_id.eq.${userId},to_user_id.eq.${contact.contact_user_id}),and(from_user_id.eq.${contact.contact_user_id},to_user_id.eq.${userId})`)
       
       setContacts((prev) => prev.filter((c) => c.id !== contact.id))
     } catch (error) {
@@ -558,8 +580,8 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
         .filter(c => c.contact_user_id) // Only contacts with user accounts
         .map((contact) => ({
           group_id: selectedGroup.id,
-          inviter_id: userId,
-          invited_user_id: contact.contact_user_id,
+          from_user_id: userId,
+          to_user_id: contact.contact_user_id,
           status: "pending",
         }))
 
@@ -567,7 +589,7 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
         // Insert invitations (ignore conflicts if already invited)
         const { error } = await supabase.from("group_invitations").upsert(
           invitations,
-          { onConflict: "group_id,invited_user_id", ignoreDuplicates: true }
+          { onConflict: "group_id,to_user_id", ignoreDuplicates: true }
         )
         
         if (error) throw error

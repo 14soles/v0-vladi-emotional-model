@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { X, UserPlus, Users, Check, XIcon, Bell, RefreshCw, UserCheck } from "lucide-react"
+import { X, UserPlus, Users, Check, XIcon, Bell, RefreshCw, UserCheck, CheckCheck, MessageCircle, Reply } from "lucide-react"
 import { supabase } from "@/lib/supabase/client"
 import Image from "next/image"
 
@@ -63,10 +63,29 @@ interface AcceptanceNotification {
   } | null
 }
 
+interface SocialNotification {
+  id: string
+  notification_type: "view" | "comment" | "comment_reply"
+  from_user_id: string
+  entry_id: string
+  comment_id?: string
+  emotion_name?: string
+  created_at: string
+  is_read: boolean
+  from_user: {
+    id: string
+    display_name: string | null
+    username: string | null
+    avatar_url: string | null
+  } | null
+}
+
 export function NotificationsView({ onClose, userId, onNotificationCountChange }: NotificationsViewProps) {
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([])
   const [groupInvitations, setGroupInvitations] = useState<GroupInvitation[]>([])
   const [acceptanceNotifications, setAcceptanceNotifications] = useState<AcceptanceNotification[]>([])
+  const [socialNotifications, setSocialNotifications] = useState<SocialNotification[]>([])
+  const [activeTab, setActiveTab] = useState<"pending" | "all">("pending")
   const [loading, setLoading] = useState(true)
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -154,14 +173,13 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
         setGroupInvitations(transformedInvitations)
       }
 
-      // Load acceptance notifications (unread only for actionable count, but show all recent)
+      // Load acceptance notifications (show all recent, both read and unread)
       const { data: acceptances, error: acceptancesError } = await supabase
         .from("acceptance_notifications")
         .select("id, notification_type, from_user_id, group_id, group_name, created_at, is_read")
         .eq("to_user_id", userId)
-        .eq("is_read", false)
         .order("created_at", { ascending: false })
-        .limit(20)
+        .limit(30)
 
       if (acceptancesError) {
         console.error("[v0] Error loading acceptance notifications:", acceptancesError)
@@ -188,9 +206,44 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
         setAcceptanceNotifications([])
       }
 
-      // Update notification count in parent (only count actionable items: friend requests + group invitations)
+      // Load social notifications (views, comments, replies)
+      const { data: socialData, error: socialError } = await supabase
+        .from("social_notifications")
+        .select("id, notification_type, from_user_id, entry_id, comment_id, emotion_name, created_at, is_read")
+        .eq("to_user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(50)
+
+      if (socialError) {
+        console.error("[v0] Error loading social notifications:", socialError)
+      } else if (mountedRef.current && socialData && socialData.length > 0) {
+        const fromUserIds = [...new Set(socialData.map(s => s.from_user_id))]
+        let profileMap = new Map()
+        
+        if (fromUserIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from("profiles")
+            .select("id, display_name, username, avatar_url")
+            .in("id", fromUserIds)
+          
+          profileMap = new Map(profiles?.map(p => [p.id, p]) || [])
+        }
+        
+        const transformedSocial: SocialNotification[] = socialData.map(s => ({
+          ...s,
+          notification_type: s.notification_type as "view" | "comment" | "comment_reply",
+          from_user: profileMap.get(s.from_user_id) || null
+        }))
+        setSocialNotifications(transformedSocial)
+      } else if (mountedRef.current) {
+        setSocialNotifications([])
+      }
+
+      // Update notification count in parent (count pending requests + invitations + unread social)
       if (mountedRef.current) {
-        const totalCount = (requests?.length || 0) + (invitations?.length || 0)
+        const unreadSocialCount = socialData?.filter(s => !s.is_read).length || 0
+        const unreadAcceptanceCount = acceptances?.filter(a => !a.is_read).length || 0
+        const totalCount = (requests?.length || 0) + (invitations?.length || 0) + unreadSocialCount + unreadAcceptanceCount
         onNotificationCountChange?.(totalCount)
       }
     } catch (error) {
@@ -468,13 +521,35 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
         .update({ is_read: true })
         .eq("id", notificationId)
       
-      setAcceptanceNotifications(prev => prev.filter(n => n.id !== notificationId))
+      setAcceptanceNotifications(prev => prev.map(n => 
+        n.id === notificationId ? { ...n, is_read: true } : n
+      ))
     } catch (error) {
       console.error("[v0] Error marking notification as read:", error)
     }
   }, [])
 
-  const hasNotifications = friendRequests.length > 0 || groupInvitations.length > 0 || acceptanceNotifications.length > 0
+  // Mark social notification as read
+  const markSocialAsRead = useCallback(async (notificationId: string) => {
+    try {
+      await supabase
+        .from("social_notifications")
+        .update({ is_read: true })
+        .eq("id", notificationId)
+      
+      setSocialNotifications(prev => prev.map(n => 
+        n.id === notificationId ? { ...n, is_read: true } : n
+      ))
+    } catch (error) {
+      console.error("[v0] Error marking social notification as read:", error)
+    }
+  }, [])
+
+  const pendingCount = friendRequests.length + groupInvitations.length
+  const unreadSocialCount = socialNotifications.filter(n => !n.is_read).length
+  const unreadAcceptanceCount = acceptanceNotifications.filter(n => !n.is_read).length
+  const allNotificationsCount = acceptanceNotifications.length + socialNotifications.length
+  const hasNotifications = friendRequests.length > 0 || groupInvitations.length > 0 || acceptanceNotifications.length > 0 || socialNotifications.length > 0
 
   return (
     <div className="flex flex-col h-full bg-white">
@@ -499,6 +574,42 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
         </div>
       </header>
 
+      {/* Tabs */}
+      <div className="flex border-b border-gray-100">
+        <button
+          onClick={() => setActiveTab("pending")}
+          className={`flex-1 py-3 text-sm font-medium transition-colors relative ${
+            activeTab === "pending" ? "text-gray-900" : "text-gray-500"
+          }`}
+        >
+          Pendientes
+          {pendingCount > 0 && (
+            <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-xs font-medium bg-red-500 text-white rounded-full">
+              {pendingCount}
+            </span>
+          )}
+          {activeTab === "pending" && (
+            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-900" />
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab("all")}
+          className={`flex-1 py-3 text-sm font-medium transition-colors relative ${
+            activeTab === "all" ? "text-gray-900" : "text-gray-500"
+          }`}
+        >
+          Todas
+          {(unreadSocialCount + unreadAcceptanceCount) > 0 && (
+            <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-xs font-medium bg-blue-500 text-white rounded-full">
+              {unreadSocialCount + unreadAcceptanceCount}
+            </span>
+          )}
+          {activeTab === "all" && (
+            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-900" />
+          )}
+        </button>
+      </div>
+
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
         {loading ? (
@@ -515,10 +626,30 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
               Cuando alguien te envie una solicitud de amistad o te invite a un grupo, aparecera aqui.
             </p>
           </div>
+        ) : activeTab === "pending" && pendingCount === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center px-6">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+              <Check className="w-8 h-8 text-gray-400" />
+            </div>
+            <h2 className="text-lg font-medium text-gray-900 mb-2">Todo al dia</h2>
+            <p className="text-sm text-gray-500">
+              No tienes solicitudes pendientes.
+            </p>
+          </div>
+        ) : activeTab === "all" && allNotificationsCount === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center px-6">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+              <Bell className="w-8 h-8 text-gray-400" />
+            </div>
+            <h2 className="text-lg font-medium text-gray-900 mb-2">Sin actividad</h2>
+            <p className="text-sm text-gray-500">
+              Cuando alguien interactue con tus emociones, aparecera aqui.
+            </p>
+          </div>
         ) : (
           <div className="divide-y divide-gray-100">
-            {/* Friend Requests */}
-            {friendRequests.map(request => (
+            {/* Friend Requests - Only in Pending tab */}
+            {activeTab === "pending" && friendRequests.map(request => (
               <div key={request.id} className="p-4">
                 <div className="flex items-start gap-3">
                   <div className="relative">
@@ -577,8 +708,8 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
               </div>
             ))}
 
-            {/* Group Invitations */}
-            {groupInvitations.map(invitation => (
+            {/* Group Invitations - Only in Pending tab */}
+            {activeTab === "pending" && groupInvitations.map(invitation => (
               <div key={invitation.id} className="p-4">
                 <div className="flex items-start gap-3">
                   <div className="relative">
@@ -638,9 +769,9 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
               </div>
             ))}
 
-            {/* Acceptance Notifications */}
-            {acceptanceNotifications.map(notification => (
-              <div key={notification.id} className="p-4 bg-green-50/50">
+            {/* Acceptance Notifications - Only in All tab */}
+            {activeTab === "all" && acceptanceNotifications.map(notification => (
+              <div key={notification.id} className={`p-4 ${notification.is_read ? 'bg-white' : 'bg-green-50/50'}`}>
                 <div className="flex items-start gap-3">
                   <div className="relative">
                     <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200 shrink-0">
@@ -677,13 +808,92 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
                       @{notification.from_user?.username || "usuario"} · {formatRelativeTime(notification.created_at)}
                     </p>
                     
-                    {/* Dismiss button */}
-                    <button
-                      onClick={() => markAcceptanceAsRead(notification.id)}
-                      className="mt-2 text-xs text-gray-500 hover:text-gray-700"
-                    >
-                      Marcar como leido
-                    </button>
+                    {/* Dismiss button - only show if unread */}
+                    {!notification.is_read && (
+                      <button
+                        onClick={() => markAcceptanceAsRead(notification.id)}
+                        className="mt-2 text-xs text-gray-500 hover:text-gray-700"
+                      >
+                        Marcar como leido
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* Social Notifications (views, comments, replies) - Only in All tab */}
+            {activeTab === "all" && socialNotifications.map(notification => (
+              <div 
+                key={notification.id} 
+                className={`p-4 ${notification.is_read ? 'bg-white' : 'bg-blue-50/50'}`}
+                onClick={() => !notification.is_read && markSocialAsRead(notification.id)}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="relative">
+                    <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200 shrink-0">
+                      {notification.from_user?.avatar_url ? (
+                        <Image
+                          src={notification.from_user.avatar_url || "/placeholder.svg"}
+                          alt={notification.from_user.display_name || "Usuario"}
+                          width={48}
+                          height={48}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-500 font-medium text-lg">
+                          {(notification.from_user?.display_name || notification.from_user?.username || "U")[0].toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center ${
+                      notification.notification_type === "view" 
+                        ? "bg-[#84CACA]" 
+                        : notification.notification_type === "comment"
+                          ? "bg-gray-600"
+                          : "bg-purple-500"
+                    }`}>
+                      {notification.notification_type === "view" ? (
+                        <CheckCheck className="w-3 h-3 text-white" />
+                      ) : notification.notification_type === "comment" ? (
+                        <MessageCircle className="w-3 h-3 text-white" />
+                      ) : (
+                        <Reply className="w-3 h-3 text-white" />
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-900">
+                      <span className="font-semibold">
+                        {notification.from_user?.display_name || notification.from_user?.username || "Usuario"}
+                      </span>
+                      {notification.notification_type === "view" 
+                        ? " ha visto tu emocion"
+                        : notification.notification_type === "comment"
+                          ? " ha comentado en tu emocion"
+                          : " ha respondido a tu comentario"
+                      }
+                      {notification.emotion_name && (
+                        <span className="font-medium"> "{notification.emotion_name}"</span>
+                      )}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      @{notification.from_user?.username || "usuario"} · {formatRelativeTime(notification.created_at)}
+                    </p>
+                    
+                    {/* Mark as read button - only show if unread */}
+                    {!notification.is_read && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          markSocialAsRead(notification.id)
+                        }}
+                        className="mt-2 text-xs text-gray-500 hover:text-gray-700"
+                      >
+                        Marcar como leido
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

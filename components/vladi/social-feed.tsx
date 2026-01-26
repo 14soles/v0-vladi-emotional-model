@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import { MessageCircle, Play, MoreHorizontal, CheckCheck, X, Send, UserMinus, Trash2 } from "lucide-react"
+import { MessageCircle, Play, MoreHorizontal, CheckCheck, X, Send, UserMinus, Trash2, Reply } from "lucide-react"
 import { supabase } from "@/lib/supabase/client"
 
 interface SocialFeedProps {
@@ -36,10 +36,12 @@ interface Comment {
   content: string
   created_at: string
   author_id: string
+  parent_comment_id: string | null
   author: {
     username: string
     avatar_url: string | null
   }
+  replies?: Comment[]
 }
 
 const QUADRANT_COLORS: Record<string, string> = {
@@ -67,7 +69,9 @@ export function SocialFeed({ userId, filterGroupId }: SocialFeedProps) {
   const [newComment, setNewComment] = useState("")
   const [loadingComments, setLoadingComments] = useState(false)
   const [sendingComment, setSendingComment] = useState(false)
+  const [replyingTo, setReplyingTo] = useState<{ id: string; username: string } | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const commentInputRef = useRef<HTMLInputElement>(null)
 
   const loadFeed = useCallback(async () => {
     if (!userId) {
@@ -229,6 +233,10 @@ export function SocialFeed({ userId, filterGroupId }: SocialFeedProps) {
   const toggleView = async (entryId: string, currentlyViewed: boolean) => {
     if (!userId) return
 
+    // Find the entry to get owner info
+    const entry = entries.find(e => e.id === entryId)
+    if (!entry) return
+
     setEntries((prev) =>
       prev.map((e) =>
         e.id === entryId
@@ -243,8 +251,18 @@ export function SocialFeed({ userId, filterGroupId }: SocialFeedProps) {
 
     try {
       if (currentlyViewed) {
+        // Remove the view
         await supabase.from("emotion_views").delete().eq("entry_id", entryId).eq("viewer_id", userId)
+        
+        // Also remove the notification (if it exists)
+        await supabase
+          .from("social_notifications")
+          .delete()
+          .eq("entry_id", entryId)
+          .eq("from_user_id", userId)
+          .eq("notification_type", "view")
       } else {
+        // Add the view
         await supabase.from("emotion_views").upsert(
           {
             entry_id: entryId,
@@ -254,6 +272,22 @@ export function SocialFeed({ userId, filterGroupId }: SocialFeedProps) {
             onConflict: "entry_id,viewer_id",
           },
         )
+        
+        // Create notification for the entry owner (only if not own entry)
+        if (entry.user_id !== userId) {
+          await supabase.from("social_notifications").upsert(
+            {
+              notification_type: "view",
+              from_user_id: userId,
+              to_user_id: entry.user_id,
+              entry_id: entryId,
+              emotion_name: entry.emotion,
+            },
+            {
+              onConflict: "entry_id,from_user_id,notification_type",
+            },
+          )
+        }
       }
     } catch (error) {
       console.error("Error toggling view:", error)
@@ -273,10 +307,11 @@ export function SocialFeed({ userId, filterGroupId }: SocialFeedProps) {
 
   const loadComments = async (entryId: string) => {
     setLoadingComments(true)
+    setReplyingTo(null)
     try {
       const { data: commentsData } = await supabase
         .from("emotion_comments")
-        .select("id, content, created_at, author_id")
+        .select("id, content, created_at, author_id, parent_comment_id")
         .eq("entry_id", entryId)
         .order("created_at", { ascending: true })
 
@@ -289,18 +324,39 @@ export function SocialFeed({ userId, filterGroupId }: SocialFeedProps) {
 
         const authorsMap = new Map(authorsData?.map((a) => [a.id, a]) || [])
 
-        const commentsWithAuthors: Comment[] = commentsData.map((c) => ({
-          id: c.id,
-          content: c.content,
-          created_at: c.created_at,
-          author_id: c.author_id,
-          author: {
-            username: authorsMap.get(c.author_id)?.username || "usuario",
-            avatar_url: authorsMap.get(c.author_id)?.avatar_url || null,
-          },
+        // Separate root comments and replies
+        const rootComments: Comment[] = []
+        const repliesMap = new Map<string, Comment[]>()
+
+        commentsData.forEach((c) => {
+          const comment: Comment = {
+            id: c.id,
+            content: c.content,
+            created_at: c.created_at,
+            author_id: c.author_id,
+            parent_comment_id: c.parent_comment_id,
+            author: {
+              username: authorsMap.get(c.author_id)?.username || "usuario",
+              avatar_url: authorsMap.get(c.author_id)?.avatar_url || null,
+            },
+          }
+
+          if (c.parent_comment_id) {
+            const replies = repliesMap.get(c.parent_comment_id) || []
+            replies.push(comment)
+            repliesMap.set(c.parent_comment_id, replies)
+          } else {
+            rootComments.push(comment)
+          }
+        })
+
+        // Attach replies to their parent comments
+        const commentsWithReplies = rootComments.map((c) => ({
+          ...c,
+          replies: repliesMap.get(c.id) || [],
         }))
 
-        setComments(commentsWithAuthors)
+        setComments(commentsWithReplies)
       } else {
         setComments([])
       }
@@ -319,6 +375,10 @@ export function SocialFeed({ userId, filterGroupId }: SocialFeedProps) {
   const sendComment = async () => {
     if (!newComment.trim() || !commentsModalId || !userId) return
 
+    // Find the entry to get owner info
+    const entry = entries.find(e => e.id === commentsModalId)
+    if (!entry) return
+
     setSendingComment(true)
     try {
       const { data, error } = await supabase
@@ -327,11 +387,42 @@ export function SocialFeed({ userId, filterGroupId }: SocialFeedProps) {
           entry_id: commentsModalId,
           author_id: userId,
           content: newComment.trim(),
+          parent_comment_id: replyingTo?.id || null,
         })
         .select()
         .single()
 
       if (error) throw error
+
+      // Create notification for the entry owner or reply target
+      if (replyingTo) {
+        // This is a reply - notify the comment author we're replying to
+        const parentComment = comments.find(c => c.id === replyingTo.id) || 
+                             comments.flatMap(c => c.replies || []).find(r => r.id === replyingTo.id)
+        
+        if (parentComment && parentComment.author_id !== userId) {
+          await supabase.from("social_notifications").insert({
+            notification_type: "comment_reply",
+            from_user_id: userId,
+            to_user_id: parentComment.author_id,
+            entry_id: commentsModalId,
+            comment_id: data.id,
+            emotion_name: entry.emotion,
+          })
+        }
+      } else {
+        // This is a new comment - notify the entry owner
+        if (entry.user_id !== userId) {
+          await supabase.from("social_notifications").insert({
+            notification_type: "comment",
+            from_user_id: userId,
+            to_user_id: entry.user_id,
+            entry_id: commentsModalId,
+            comment_id: data.id,
+            emotion_name: entry.emotion,
+          })
+        }
+      }
 
       // Reload comments
       await loadComments(commentsModalId)
@@ -342,11 +433,23 @@ export function SocialFeed({ userId, filterGroupId }: SocialFeedProps) {
       )
 
       setNewComment("")
+      setReplyingTo(null)
     } catch (error) {
       console.error("Error sending comment:", error)
     } finally {
       setSendingComment(false)
     }
+  }
+
+  const startReply = (comment: Comment) => {
+    setReplyingTo({ id: comment.id, username: comment.author.username })
+    setNewComment(`@${comment.author.username} `)
+    commentInputRef.current?.focus()
+  }
+
+  const cancelReply = () => {
+    setReplyingTo(null)
+    setNewComment("")
   }
 
   const deleteComment = async (commentId: string) => {
@@ -533,7 +636,7 @@ export function SocialFeed({ userId, filterGroupId }: SocialFeedProps) {
       {commentsModalId && (
         <div
           className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center"
-          onClick={() => setCommentsModalId(null)}
+          onClick={() => { setCommentsModalId(null); setReplyingTo(null); setNewComment(""); }}
         >
           <div
             className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl max-h-[80vh] flex flex-col"
@@ -542,7 +645,7 @@ export function SocialFeed({ userId, filterGroupId }: SocialFeedProps) {
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <h3 className="font-semibold text-gray-900">Comentarios</h3>
-              <button onClick={() => setCommentsModalId(null)} className="p-1 text-gray-400 hover:text-gray-600">
+              <button onClick={() => { setCommentsModalId(null); setReplyingTo(null); setNewComment(""); }} className="p-1 text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -555,35 +658,88 @@ export function SocialFeed({ userId, filterGroupId }: SocialFeedProps) {
                 <div className="text-center text-gray-400 py-8">No hay comentarios aún</div>
               ) : (
                 comments.map((comment) => (
-                  <div key={comment.id} className="flex gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden flex-shrink-0">
-                      {comment.author.avatar_url ? (
-                        <img
-                          src={comment.author.avatar_url || "/placeholder.svg"}
-                          alt=""
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs font-medium">
-                          {comment.author.username.charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm text-gray-900">{comment.author.username}</span>
-                        <span className="text-xs text-gray-400">{formatTimeAgo(comment.created_at)}</span>
-                        {comment.author_id === userId && (
-                          <button
-                            onClick={() => deleteComment(comment.id)}
-                            className="text-red-500 hover:text-red-600 ml-auto"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                  <div key={comment.id} className="space-y-3">
+                    {/* Main comment */}
+                    <div className="flex gap-3">
+                      <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden flex-shrink-0">
+                        {comment.author.avatar_url ? (
+                          <img
+                            src={comment.author.avatar_url || "/placeholder.svg"}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs font-medium">
+                            {comment.author.username.charAt(0).toUpperCase()}
+                          </div>
                         )}
                       </div>
-                      <p className="text-sm text-gray-700 mt-0.5">{comment.content}</p>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm text-gray-900">{comment.author.username}</span>
+                          <span className="text-xs text-gray-400">{formatTimeAgo(comment.created_at)}</span>
+                          {comment.author_id === userId && (
+                            <button
+                              onClick={() => deleteComment(comment.id)}
+                              className="text-red-500 hover:text-red-600 ml-auto"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-700 mt-0.5">{comment.content}</p>
+                        <button
+                          onClick={() => startReply(comment)}
+                          className="text-xs text-gray-500 hover:text-gray-700 mt-1"
+                        >
+                          Responder
+                        </button>
+                      </div>
                     </div>
+
+                    {/* Replies */}
+                    {comment.replies && comment.replies.length > 0 && (
+                      <div className="ml-11 space-y-3">
+                        {comment.replies.map((reply) => (
+                          <div key={reply.id} className="flex gap-3">
+                            <div className="w-6 h-6 rounded-full bg-gray-200 overflow-hidden flex-shrink-0">
+                              {reply.author.avatar_url ? (
+                                <img
+                                  src={reply.author.avatar_url || "/placeholder.svg"}
+                                  alt=""
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-gray-500 text-[10px] font-medium">
+                                  {reply.author.username.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-xs text-gray-900">{reply.author.username}</span>
+                                <span className="text-[10px] text-gray-400">{formatTimeAgo(reply.created_at)}</span>
+                                {reply.author_id === userId && (
+                                  <button
+                                    onClick={() => deleteComment(reply.id)}
+                                    className="text-red-500 hover:text-red-600 ml-auto"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-700 mt-0.5">{reply.content}</p>
+                              <button
+                                onClick={() => startReply(reply)}
+                                className="text-[10px] text-gray-500 hover:text-gray-700 mt-1"
+                              >
+                                Responder
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))
               )}
@@ -591,12 +747,23 @@ export function SocialFeed({ userId, filterGroupId }: SocialFeedProps) {
 
             {/* Input */}
             <div className="px-5 py-4 border-t border-gray-100">
+              {replyingTo && (
+                <div className="flex items-center justify-between mb-2 px-2">
+                  <span className="text-xs text-gray-500">
+                    Respondiendo a <span className="font-medium">@{replyingTo.username}</span>
+                  </span>
+                  <button onClick={cancelReply} className="text-xs text-gray-400 hover:text-gray-600">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
               <div className="flex gap-2">
                 <input
+                  ref={commentInputRef}
                   type="text"
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
-                  placeholder="Escribe un comentario..."
+                  placeholder={replyingTo ? "Escribe una respuesta..." : "Escribe un comentario..."}
                   className="flex-1 px-4 py-2.5 bg-gray-100 rounded-full text-sm outline-none focus:ring-2 focus:ring-gray-200"
                   onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendComment()}
                 />

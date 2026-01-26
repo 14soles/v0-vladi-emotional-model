@@ -374,7 +374,7 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
         .eq("id", request.id)
 
       // Create/update contact for me
-      await supabase.from("contacts").upsert(
+      const { data: myContact } = await supabase.from("contacts").upsert(
         {
           user_id: userId,
           contact_user_id: request.from_user_id,
@@ -382,7 +382,7 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
           friendship_status: "accepted",
         },
         { onConflict: "user_id,contact_user_id" }
-      )
+      ).select().single()
 
       // Create/update contact for them
       const { data: myProfile } = await supabase
@@ -391,7 +391,7 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
         .eq("id", userId)
         .single()
 
-      await supabase.from("contacts").upsert(
+      const { data: theirContact } = await supabase.from("contacts").upsert(
         {
           user_id: request.from_user_id,
           contact_user_id: userId,
@@ -399,7 +399,54 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
           friendship_status: "accepted",
         },
         { onConflict: "user_id,contact_user_id" }
-      )
+      ).select().single()
+
+      // Add to my "Todos" group
+      if (myContact) {
+        const { data: myTodosGroup } = await supabase
+          .from("privacy_groups")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("name", "Todos")
+          .single()
+
+        if (myTodosGroup) {
+          await supabase
+            .from("group_members")
+            .upsert({
+              group_id: myTodosGroup.id,
+              contact_id: myContact.id,
+            }, { onConflict: "group_id,contact_id" })
+        }
+      }
+
+      // Add to their "Todos" group
+      if (theirContact) {
+        const { data: theirTodosGroup } = await supabase
+          .from("privacy_groups")
+          .select("id")
+          .eq("user_id", request.from_user_id)
+          .eq("name", "Todos")
+          .single()
+
+        if (theirTodosGroup) {
+          await supabase
+            .from("group_members")
+            .upsert({
+              group_id: theirTodosGroup.id,
+              contact_id: theirContact.id,
+            }, { onConflict: "group_id,contact_id" })
+        }
+      }
+
+      // Create acceptance notification for the original requester
+      await supabase
+        .from("acceptance_notifications")
+        .insert({
+          notification_type: "friend_accepted",
+          from_user_id: userId,
+          to_user_id: request.from_user_id,
+        })
 
       // Reload data
       await loadData()

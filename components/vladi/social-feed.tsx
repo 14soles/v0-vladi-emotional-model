@@ -635,11 +635,12 @@ export function SocialFeed({ userId, filterGroupId }: SocialFeedProps) {
       {/* Comments Modal */}
       {commentsModalId && (
         <div
-          className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center"
+          className="fixed inset-0 bg-black/50 z-[100] flex items-end sm:items-center justify-center"
           onClick={() => { setCommentsModalId(null); setReplyingTo(null); setNewComment(""); }}
         >
           <div
-            className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl max-h-[80vh] flex flex-col"
+            className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl flex flex-col"
+            style={{ maxHeight: "70vh", marginBottom: "env(safe-area-inset-bottom)" }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -745,8 +746,8 @@ export function SocialFeed({ userId, filterGroupId }: SocialFeedProps) {
               )}
             </div>
 
-            {/* Input */}
-            <div className="px-5 py-4 border-t border-gray-100">
+            {/* Input - Always visible at bottom */}
+            <div className="px-5 py-4 border-t border-gray-100 bg-white shrink-0">
               {replyingTo && (
                 <div className="flex items-center justify-between mb-2 px-2">
                   <span className="text-xs text-gray-500">
@@ -766,11 +767,12 @@ export function SocialFeed({ userId, filterGroupId }: SocialFeedProps) {
                   placeholder={replyingTo ? "Escribe una respuesta..." : "Escribe un comentario..."}
                   className="flex-1 px-4 py-2.5 bg-gray-100 rounded-full text-sm outline-none focus:ring-2 focus:ring-gray-200"
                   onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendComment()}
+                  autoComplete="off"
                 />
                 <button
                   onClick={sendComment}
                   disabled={!newComment.trim() || sendingComment}
-                  className="p-2.5 bg-gray-900 text-white rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="p-2.5 bg-gray-900 text-white rounded-full disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
                 >
                   <Send className="w-4 h-4" />
                 </button>

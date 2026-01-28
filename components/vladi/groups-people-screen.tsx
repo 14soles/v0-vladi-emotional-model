@@ -373,8 +373,8 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
         .update({ status: "accepted" })
         .eq("id", request.id)
 
-      // Create/update contact for me
-      const { data: myContact } = await supabase.from("contacts").upsert(
+      // Create/update contact for me (I add the requester to my contacts)
+      const { data: myContact, error: myContactError } = await supabase.from("contacts").upsert(
         {
           user_id: userId,
           contact_user_id: request.from_user_id,
@@ -384,14 +384,20 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
         { onConflict: "user_id,contact_user_id" }
       ).select().single()
 
-      // Create/update contact for them
+      if (myContactError) {
+        console.error("[v0] Error creating my contact:", myContactError)
+      }
+
+      // Get my profile to use as contact name for the requester
       const { data: myProfile } = await supabase
         .from("profiles")
         .select("display_name, username")
         .eq("id", userId)
         .single()
 
-      const { data: theirContact } = await supabase.from("contacts").upsert(
+      // IMPORTANT: Create/update contact for the requester (they add me to their contacts)
+      // This ensures the person who sent the request also sees the accepter in their people list
+      const { data: theirContact, error: theirContactError } = await supabase.from("contacts").upsert(
         {
           user_id: request.from_user_id,
           contact_user_id: userId,
@@ -400,6 +406,10 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
         },
         { onConflict: "user_id,contact_user_id" }
       ).select().single()
+
+      if (theirContactError) {
+        console.error("[v0] Error creating their contact:", theirContactError)
+      }
 
       // Add to my "Todos" group
       if (myContact) {

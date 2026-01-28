@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { X, Plus, Eye, ChevronRight, Check } from "lucide-react"
 import { useVladiStore } from "@/lib/vladi-store"
 import type { EmotionData } from "./emotion-screen"
@@ -48,9 +48,26 @@ export function ContextSheet({ emotionData, onClose, onPublish, userId }: Contex
   const [bodySignals, setBodySignals] = useState<Set<string>>(new Set())
   const [timeReference, setTimeReference] = useState<string>("")
   const [certainty, setCertainty] = useState<string>("")
+  const [keyboardVisible, setKeyboardVisible] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const sheetRef = useRef<HTMLDivElement>(null)
 
   const { activities, company, addActivity, addCompany } = useVladiStore()
+
+  // Handle keyboard visibility for better UX
+  useEffect(() => {
+    const handleResize = () => {
+      if (typeof window !== 'undefined' && window.visualViewport) {
+        const isKeyboard = window.visualViewport.height < window.innerHeight * 0.75
+        setKeyboardVisible(isKeyboard)
+      }
+    }
+    
+    if (typeof window !== 'undefined' && window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleResize)
+      return () => window.visualViewport?.removeEventListener('resize', handleResize)
+    }
+  }, [])
 
   const now = new Date()
   const dateStr = `Hoy, ${now.getDate()} ${now.toLocaleString("es-ES", { month: "short" })} ${now.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}`
@@ -111,12 +128,16 @@ export function ContextSheet({ emotionData, onClose, onPublish, userId }: Contex
     <>
       <div className="fixed inset-0 bg-black/30 z-[100] transition-opacity" onClick={onClose} />
 
-      {/* Sheet - Better mobile height handling */}
+      {/* Sheet - Better mobile height handling with keyboard support */}
       <div
-        className="fixed bottom-0 left-0 right-0 z-[101] animate-in slide-in-from-bottom duration-500"
-        style={{ height: "75dvh", maxHeight: "650px" }}
+        ref={sheetRef}
+        className="fixed inset-x-0 bottom-0 z-[101] animate-in slide-in-from-bottom duration-500 transition-all"
+        style={{ 
+          height: keyboardVisible ? "100dvh" : "75dvh",
+          maxHeight: keyboardVisible ? "none" : "650px",
+        }}
       >
-        <div className="bg-white w-full h-full rounded-t-[40px] px-6 sm:px-10 py-6 sm:py-8 flex flex-col items-center shadow-[0_-10px_40px_rgba(0,0,0,0.2)] overflow-hidden">
+        <div className="bg-white w-full h-full rounded-t-[40px] px-6 sm:px-10 py-6 sm:py-8 flex flex-col items-center shadow-[0_-10px_40px_rgba(0,0,0,0.2)] overflow-y-auto">
           {/* Handle */}
           <div className="w-16 h-1 bg-gray-300 rounded-full mb-4 sm:mb-6 opacity-50 shrink-0" />
 
@@ -186,30 +207,37 @@ export function ContextSheet({ emotionData, onClose, onPublish, userId }: Contex
             </div>
           )}
 
-          {/* Input area - Aumentado tamaño del texto */}
-          <div className="w-full flex-1 flex flex-col justify-start relative mt-2 mb-4 min-h-0 overflow-hidden">
+          {/* Input area - Improved keyboard handling */}
+          <div className="w-full flex-1 flex flex-col justify-center relative mt-2 mb-4 min-h-[120px]">
             <textarea
               ref={inputRef}
               value={text}
               onChange={(e) => setText(e.target.value)}
-              onFocus={() => setShowPlaceholder(false)}
+              onFocus={(e) => {
+                setShowPlaceholder(false)
+                // Scroll into view when focused to ensure visibility with keyboard
+                setTimeout(() => {
+                  e.target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                }, 100)
+              }}
               onBlur={() => !text && setShowPlaceholder(true)}
-              className="w-full h-full border-none outline-none font-sans font-light text-2xl sm:text-3xl text-gray-900 text-center resize-none bg-transparent leading-relaxed relative z-10 p-2 overflow-y-auto"
+              className="w-full min-h-[100px] border-none outline-none font-sans font-light text-2xl sm:text-3xl text-gray-900 text-center resize-none bg-transparent leading-relaxed relative z-10 p-2"
               style={{ caretColor: "#111" }}
+              placeholder=""
             />
             {showPlaceholder && !text && (
-              <div className="absolute top-2 left-0 right-0 flex items-start justify-center pointer-events-none z-[5]">
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[5]">
                 <span className="font-light text-2xl sm:text-3xl text-gray-400 whitespace-pre">{typedPlaceholder}</span>
                 <span className="blinking-cursor" />
               </div>
             )}
           </div>
 
-          {/* Publish button */}
+          {/* Publish button - sticky at bottom */}
           <button
             onClick={handlePublish}
-            className="w-full bg-gray-900 text-white rounded-full py-4 sm:py-5 text-base sm:text-lg font-normal flex items-center justify-center shadow-[0_10px_25px_rgba(0,0,0,0.15)] active:scale-[0.98] transition-transform shrink-0 touch-manipulation"
-            style={{ marginBottom: "env(safe-area-inset-bottom)" }}
+            className="w-full bg-gray-900 text-white rounded-full py-4 sm:py-5 text-base sm:text-lg font-normal flex items-center justify-center shadow-[0_10px_25px_rgba(0,0,0,0.15)] active:scale-[0.98] transition-transform shrink-0 touch-manipulation mt-auto"
+            style={{ paddingBottom: "max(16px, env(safe-area-inset-bottom))" }}
           >
             Guardar
           </button>

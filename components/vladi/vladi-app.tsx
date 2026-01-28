@@ -4,7 +4,6 @@ import { useState, useCallback, useEffect } from "react"
 import { BottomNavbar } from "./bottom-navbar"
 import { RecordView } from "./record-view"
 import { EmotionScreen, type EmotionData } from "./emotion-screen"
-import { IntensityStep } from "./intensity-step"
 import { ContextSheet } from "./context-sheet"
 import { MirrorOverlay, type LinkedEmotionContext } from "./mirror-overlay"
 import { InterventionRunner } from "./intervention-runner"
@@ -36,17 +35,18 @@ interface VladiAppProps {
   } | null
 }
 
-export default function VladiApp({ userId, userProfile }: VladiAppProps) {
+export default function VladiApp({ userId, userProfile: initialUserProfile }: VladiAppProps) {
   const [activeTab, setActiveTab] = useState("record")
   const [currentScreen, setCurrentScreen] = useState<
-    "main" | "emotion" | "intensity" | "context" | "mirror" | "vladi-chat" | "notifications" | "personas"
+    "main" | "emotion" | "context" | "mirror" | "vladi-chat" | "notifications" | "personas"
   >("main")
-  const [lastUserIntensity, setLastUserIntensity] = useState<number>(6)
   const [selectedQuadrant, setSelectedQuadrant] = useState<QuadrantId>("green")
   const [emotionData, setEmotionData] = useState<EmotionData | null>(null)
   const [contextData, setContextData] = useState<{ text: string; tags: string[] } | null>(null)
   const [showProfile, setShowProfile] = useState(false)
   const [notificationCount, setNotificationCount] = useState(0)
+  // Mutable profile state that can be refreshed after edits
+  const [userProfile, setUserProfile] = useState(initialUserProfile)
   const [vladiChatContext, setVladiChatContext] = useState<{
     emotion: string
     intensity: number
@@ -109,28 +109,7 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
       }
     }
 
-    // Load last user intensity for default value
-    const loadLastIntensity = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("emotion_entries")
-          .select("intensity")
-          .eq("user_id", userId)
-          .not("intensity", "is", null)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle()
-
-        if (!error && data?.intensity && mounted) {
-          setLastUserIntensity(data.intensity)
-        }
-      } catch {
-        // Use default of 6 if no previous intensity found
-      }
-    }
-
     loadNotifications()
-    loadLastIntensity()
 
     return () => {
       mounted = false
@@ -143,21 +122,13 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
   }, [])
 
   const handleEmotionConfirm = useCallback((data: EmotionData) => {
+    // Skip intensity step - go directly to context
+    // The energy value from emotion selection will be used as intensity (0-100 scale)
     setEmotionData(data)
-    setCurrentScreen("intensity")
-  }, [])
-
-  const handleIntensityConfirm = useCallback((intensity: number) => {
-    if (emotionData) {
-      setEmotionData({ ...emotionData, intensity })
-      setLastUserIntensity(intensity)
-    }
     setCurrentScreen("context")
-  }, [emotionData])
-
-  const handleIntensityBack = useCallback(() => {
-    setCurrentScreen("emotion")
   }, [])
+
+
 
   const handlePublish = useCallback(
     async (
@@ -527,18 +498,8 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
         <BottomNavbar activeTab={activeTab} onTabChange={handleTabChange} userProfile={userProfile} />
       )}
 
-      {(currentScreen === "emotion" || currentScreen === "intensity" || currentScreen === "context") && (
+      {(currentScreen === "emotion" || currentScreen === "context") && (
         <EmotionScreen quadrant={selectedQuadrant} onClose={handleCloseEmotion} onConfirm={handleEmotionConfirm} />
-      )}
-
-      {currentScreen === "intensity" && emotionData && (
-        <IntensityStep
-          emotion={emotionData.emotion}
-          defaultValue={lastUserIntensity}
-          color={QUADRANT_STATES.find(s => s.id === selectedQuadrant)?.color || "#8BB458"}
-          onConfirm={handleIntensityConfirm}
-          onBack={handleIntensityBack}
-        />
       )}
 
       {currentScreen === "context" && emotionData && (
@@ -581,7 +542,36 @@ export default function VladiApp({ userId, userProfile }: VladiAppProps) {
         />
       )}
 
-      {showProfile && <ProfileScreen userProfile={userProfile} onClose={handleCloseProfile} />}
+      {showProfile && (
+        <ProfileScreen 
+          userProfile={userProfile} 
+          onClose={handleCloseProfile}
+          onProfileUpdate={async () => {
+            // Refresh profile data from database
+            if (!userId) return
+            try {
+              const { data: updatedProfile } = await supabase
+                .from("profiles")
+                .select("*")
+                .eq("id", userId)
+                .single()
+              
+              if (updatedProfile) {
+                setUserProfile({
+                  id: updatedProfile.id,
+                  username: updatedProfile.username,
+                  email: updatedProfile.email,
+                  phone: updatedProfile.phone || "",
+                  display_name: updatedProfile.display_name || updatedProfile.username,
+                  avatar_url: updatedProfile.avatar_url || undefined,
+                })
+              }
+            } catch (error) {
+              console.error("[v0] Error refreshing profile:", error)
+            }
+          }}
+        />
+      )}
     </div>
   )
 }

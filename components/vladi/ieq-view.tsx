@@ -347,12 +347,12 @@ export function IEQView({
             </h3>
             <p className="text-sm text-gray-600 mb-4">
               {showInfoModal === "emotional_state"
-                ? "Este bloque resume cómo te has sentido en conjunto durante el periodo seleccionado. No muestra una emoción puntual ni un diagnóstico: es una tendencia basada en tus check-ins recientes, dando más peso a los más cercanos en el tiempo."
+                ? "Este bloque resume como te has sentido en conjunto durante el periodo seleccionado. No muestra una emocion puntual ni un diagnostico: es una tendencia basada en tus check-ins recientes, dando mas peso a los mas cercanos en el tiempo."
                 : showInfoModal === "deam_ieq"
-                  ? "El índice DEAM EQ mide tu inteligencia emocional basándose en granularidad, percepción, conciencia contextual, adaptabilidad e inercia emocional."
+                  ? "El indice DEAM EQ mide tu inteligencia emocional cuantificada. Se calcula con la formula: EQ = 100 * (0.20*G + 0.15*P + 0.25*C + 0.40*A) * (1 - Ie'), donde G=Granularidad, P=Percepcion/Adherencia, C=Conciencia Contextual, A=Adaptabilidad, e Ie=Inercia Emocional. Basado en el modelo de Mayer & Salovey de las 4 ramas de inteligencia emocional."
                   : showInfoModal === "inertia"
-                    ? "Tiempo promedio que tardas en recuperarte de estados emocionales negativos intensos. Un valor menor indica mejor capacidad de recuperación."
-                    : "Muestra la evolución de la intensidad de tus emociones y tu nivel de bienestar a lo largo del tiempo."}
+                    ? "La Inercia Emocional (Ie) mide cuanto tiempo tardan en disiparse tus estados negativos. Se calcula como el tiempo promedio de recuperacion desde un pico de intensidad negativa hasta volver a tu linea base emocional. Un valor bajo (pocas horas) indica buena capacidad de recuperacion y resiliencia emocional."
+                    : "Muestra la evolucion de dos metricas clave: Intensidad (energia de tus emociones, escala 0-100) y Bienestar (derivado de la valencia o pleasantness, escala 0-100). El grafico te ayuda a identificar patrones temporales en tu experiencia emocional."}
             </p>
             <button
               onClick={() => setShowInfoModal(null)}

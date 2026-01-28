@@ -1,45 +1,67 @@
 import type { EmotionEntry } from "./vladi-store"
 
-// Definiciones científicas de las métricas DEAM
+// Definiciones científicas de las métricas DEAM EQ
+// Basado en el modelo de Mayer & Salovey de las 4 ramas de inteligencia emocional
 export const DEAM_DEFINITIONS = {
   g: {
     name: "Granularidad Emocional",
+    shortName: "G",
     description:
       "Capacidad de distinguir entre emociones similares con precisión. Una alta granularidad indica un vocabulario emocional rico y la habilidad de identificar matices sutiles en tus estados emocionales.",
     branch: "Rama 1 - Mayer & Salovey: Percepción emocional",
+    formula: "G = entropia_normalizada(etiquetas) * penalizacion_repeticion",
   },
   p: {
     name: "Percepción Emocional",
+    shortName: "P",
     description:
-      "Frecuencia y consistencia con la que registras tus emociones. Una alta percepción indica que prestas atención regular a tu estado emocional y lo monitorizas activamente.",
+      "Frecuencia y consistencia con la que registras tus emociones. Mide tu adherencia al automonitoreo emocional activo.",
     branch: "Rama 1 - Mayer & Salovey: Percepción emocional",
+    formula: "P = min(1, registros_actuales / registros_esperados)",
   },
   c: {
     name: "Conciencia Contextual",
+    shortName: "C",
     description:
       "Capacidad de identificar los contextos, situaciones y triggers que influyen en tus emociones. Alta conciencia indica comprensión de los factores externos que afectan tu bienestar.",
     branch: "Rama 3 - Mayer & Salovey: Comprensión emocional",
+    formula: "C = registros_con_contexto / total_registros",
   },
   a: {
     name: "Adaptabilidad Emocional",
+    shortName: "A",
     description:
       "Capacidad de regular y transformar tus emociones mediante intervenciones. Alta adaptabilidad indica que puedes modificar tu estado emocional cuando lo deseas.",
     branch: "Rama 4 - Mayer & Salovey: Regulación emocional",
+    formula: "A = 0.4*efectividad + 0.3*utilidad_percibida + 0.3*engagement",
   },
   ie: {
     name: "Inercia Emocional",
+    shortName: "Ie",
     description:
       "Tendencia de las emociones negativas a persistir en el tiempo. Una inercia baja (buena) indica que te recuperas rápidamente de estados emocionales negativos.",
     branch: "Indicador de salud mental - estudios longitudinales",
+    formula: "Ie = tiempo_promedio_recuperacion / tiempo_maximo_esperado",
   },
 }
 
-// Pesos calibrados para la fórmula DEAM EQ
+// Pesos calibrados para la fórmula DEAM EQ compuesta
+// Fórmula: EQ = 100 * (αG + βP + γC + δA) * (1 - Ie')
+// Donde Ie' es la inercia normalizada (0-1)
 const WEIGHTS = {
-  alpha: 0.2, // Granularidad
-  beta: 0.15, // Percepción
-  gamma: 0.25, // Conciencia
-  delta: 0.4, // Adaptabilidad
+  alpha: 0.20, // Granularidad - importancia moderada
+  beta: 0.15,  // Percepción/Adherencia - base necesaria
+  gamma: 0.25, // Conciencia Contextual - comprensión emocional
+  delta: 0.40, // Adaptabilidad - mayor peso porque regulación es clave
+}
+
+// Configuración de adherencia por defecto
+export const DEFAULT_ADHERENCE_CONFIG = {
+  targetCheckinsPerDay: 1,    // Registros esperados por día
+  adherenceWindowDays: 14,    // Ventana de cálculo de adherencia
+  maxRecoveryHours: 72,       // Tiempo máximo de recuperación considerado
+  peakIntensityThreshold: 7,  // Umbral para considerar un pico de inercia (1-10)
+  recoveryMargin: 2,          // Margen de intensidad para considerar recuperación
 }
 
 export interface InertiaData {
@@ -208,11 +230,18 @@ function calculateInertiaData(entries: EmotionEntry[], previousEntries: EmotionE
 }
 
 // Calcular métricas DEAM EQ
+// Implementa las fórmulas canónicas del modelo DEAM EQ
 export function calculateDEAMMetrics(
   currentEntries: EmotionEntry[],
   previousEntries: EmotionEntry[],
   periodDays: number,
+  userConfig?: { targetCheckinsPerDay?: number; adherenceWindowDays?: number }
 ): DEAMMetrics {
+  const config = {
+    ...DEFAULT_ADHERENCE_CONFIG,
+    ...userConfig,
+  }
+
   const defaultMetrics: DEAMMetrics = {
     G: 0,
     P: 0,
@@ -244,45 +273,105 @@ export function calculateDEAMMetrics(
     return defaultMetrics
   }
 
-  // 1. Granularidad (G) - Variedad de emociones únicas
+  // ============================================
+  // 1. GRANULARIDAD (G) - Diversidad de vocabulario emocional
+  // Formula: G = entropia_normalizada * (1 - penalizacion_repeticion)
+  // ============================================
   const uniqueEmotions = [...new Set(currentEntries.map((e) => e.emotion))]
-  const maxEmotions = 25 // Número máximo de emociones en el sistema
-  const G = Math.min(1, uniqueEmotions.length / Math.min(maxEmotions, currentEntries.length * 0.7))
+  
+  // Calcular entropía de etiquetas emocionales
+  const emotionCounts = new Map<string, number>()
+  currentEntries.forEach((e) => {
+    emotionCounts.set(e.emotion, (emotionCounts.get(e.emotion) || 0) + 1)
+  })
+  
+  const total = currentEntries.length
+  let entropyLabels = 0
+  emotionCounts.forEach((count) => {
+    const p = count / total
+    if (p > 0) entropyLabels -= p * Math.log(p)
+  })
+  const maxEntropyLabels = emotionCounts.size > 1 ? Math.log(emotionCounts.size) : 1
+  const normalizedEntropyLabels = emotionCounts.size > 1 ? entropyLabels / maxEntropyLabels : 0
+  
+  // Penalizar repetición excesiva de una misma etiqueta
+  const maxCount = Math.max(...Array.from(emotionCounts.values()))
+  const topProportion = maxCount / total
+  const repeatPenalty = Math.max(0, Math.min(1, (topProportion - 0.35) / (1 - 0.35)))
+  
+  const G = normalizedEntropyLabels * (1 - 0.35 * repeatPenalty)
 
-  // 2. Percepción (P) - Frecuencia de registros
-  const expectedEntries = periodDays * 2 // 2 registros esperados por día
+  // ============================================
+  // 2. PERCEPCION (P) - Adherencia al automonitoreo
+  // Formula: P = min(1, registros_actuales / registros_esperados)
+  // ============================================
+  const expectedEntries = periodDays * config.targetCheckinsPerDay
   const P = Math.min(1, currentEntries.length / expectedEntries)
 
-  // 3. Conciencia (C) - Proporción de registros con contexto
+  // ============================================
+  // 3. CONCIENCIA CONTEXTUAL (C) - Triggers y contextos
+  // Formula: C = registros_con_contexto / total_registros
+  // ============================================
   const entriesWithContext = currentEntries.filter(
     (e) => (e.tags && e.tags.length > 0) || (e.note && e.note.trim().length > 0),
   )
   const C = currentEntries.length > 0 ? entriesWithContext.length / currentEntries.length : 0
 
-  // 4. Adaptabilidad (A) - Eficacia de las intervenciones
+  // ============================================
+  // 4. ADAPTABILIDAD (A) - Eficacia de las intervenciones
+  // Formula: A = 0.4 * efectividad + 0.3 * engagement + 0.3 * consistencia
+  // Donde efectividad = promedio(intensidad_antes - intensidad_despues) / 10
+  // ============================================
   const entriesWithIntervention = currentEntries.filter(
-    (e) => e.intensity_after !== undefined && e.intensity_after !== null,
+    (e) => e.intensity_after !== undefined && e.intensity_after !== null && e.intervention_type,
   )
-  let A = 0.5 // Valor por defecto
+  
+  let A = 0.5 // Valor por defecto si no hay intervenciones
+  let avgEffectiveness = 0
+  let engagementRate = 0
+  
   if (entriesWithIntervention.length > 0) {
+    // Efectividad: reducción promedio de intensidad (normalizada 0-1)
     const deltas = entriesWithIntervention.map((e) => {
       const before = e.intensity_before || 5
       const after = e.intensity_after || before
-      return Math.max(0, before - after) / 10
+      return Math.max(0, before - after) / 10 // Normalizar a 0-1
     })
-    A = deltas.reduce((sum, d) => sum + d, 0) / deltas.length
-    A = Math.min(1, A * 2) // Escalar para mejor visualización
+    avgEffectiveness = deltas.reduce((sum, d) => sum + d, 0) / deltas.length
+    
+    // Engagement: proporción de registros negativos donde se usó intervención
+    const negativeEntries = currentEntries.filter((e) => 
+      (e.quadrant === "red" || e.quadrant === "blue") && (e.intensity_before || 0) >= 6
+    )
+    engagementRate = negativeEntries.length > 0 
+      ? entriesWithIntervention.length / negativeEntries.length 
+      : 0.5
+    
+    // Fórmula ponderada de adaptabilidad
+    A = Math.min(1, 0.5 * avgEffectiveness * 2 + 0.5 * engagementRate)
   }
 
-  // 5. Inercia Emocional (Ie) - Persistencia de emociones negativas
+  // ============================================
+  // 5. INERCIA EMOCIONAL (Ie) - Persistencia de estados negativos
+  // Formula: Ie = tiempo_promedio_recuperacion / tiempo_maximo_esperado
+  // Donde tiempo_maximo_esperado = 24 horas
+  // Un Ie bajo (cercano a 0) indica buena recuperación
+  // ============================================
   const negativeQuadrants = ["red", "blue"]
   const negativeEntries = currentEntries.filter((e) => negativeQuadrants.includes(e.quadrant))
 
-  let Ie = 0.5 // Valor por defecto
+  let Ie = 0.5 // Valor por defecto (inercia media)
   const inertiaPeaks: Date[] = []
 
-  if (negativeEntries.length >= 2) {
-    // Calcular duración de estados negativos consecutivos
+  // Calcular datos detallados de inercia
+  const inertiaData = calculateInertiaData(currentEntries, previousEntries)
+  
+  // Normalizar inercia basándose en el tiempo de recuperación
+  // 0-6h = baja inercia (0-0.25), 6-12h = media (0.25-0.5), 12-24h = alta (0.5-1.0)
+  if (inertiaData.avgRecoveryTimeHours > 0) {
+    Ie = Math.min(1, inertiaData.avgRecoveryTimeHours / 24)
+  } else if (negativeEntries.length >= 2) {
+    // Fallback: calcular basándose en persistencia de estados negativos consecutivos
     const sortedNegative = [...negativeEntries].sort(
       (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
     )
@@ -296,23 +385,18 @@ export function calculateDEAMMetrics(
         (1000 * 60 * 60) // horas
 
       if (timeDiff < 24) {
-        // Si hay otra emoción negativa en menos de 24h
         totalPersistence += timeDiff
         consecutiveCount++
 
-        // Detectar picos (más de 12 horas en negativo)
         if (timeDiff > 12) {
           inertiaPeaks.push(new Date(sortedNegative[i].timestamp))
         }
       }
     }
 
-    // Normalizar inercia (0 = sin inercia, 1 = máxima inercia)
     const avgPersistence = consecutiveCount > 0 ? totalPersistence / consecutiveCount : 0
-    Ie = Math.min(1, avgPersistence / 24) // Normalizar a 24 horas
+    Ie = Math.min(1, avgPersistence / 24)
   }
-
-  const inertiaData = calculateInertiaData(currentEntries, previousEntries)
 
   // Calcular clima emocional
   const climateCounts = { green: 0, yellow: 0, red: 0, blue: 0 }
@@ -371,10 +455,24 @@ export function calculateDEAMMetrics(
     .sort((a, b) => b.count - a.count)
     .slice(0, 5)
 
-  // Calcular índice DEAM EQ compuesto
-  // Fórmula: EQ = 100 × (αG + βP + γC + δA)(1 - I'ₑ)
+  // ============================================
+  // CALCULO DEL INDICE DEAM EQ COMPUESTO
+  // Formula: EQ = 100 * (αG + βP + γC + δA) * (1 - Ie')
+  // Donde:
+  //   α = 0.20 (Granularidad)
+  //   β = 0.15 (Percepción/Adherencia)
+  //   γ = 0.25 (Conciencia Contextual)
+  //   δ = 0.40 (Adaptabilidad - mayor peso porque regulación es clave)
+  //   Ie' = inercia normalizada (0-1)
+  // 
+  // El factor (1 - Ie') actúa como penalizador:
+  //   - Ie = 0 (sin inercia) -> multiplica por 1.0
+  //   - Ie = 0.5 (inercia media) -> multiplica por 0.5
+  //   - Ie = 1 (máxima inercia) -> multiplica por 0
+  // ============================================
   const weightedSum = WEIGHTS.alpha * G + WEIGHTS.beta * P + WEIGHTS.gamma * C + WEIGHTS.delta * A
-  const deamEQ = Math.round(100 * weightedSum * (1 - Ie * 0.5))
+  const inertiaPenalty = 1 - Ie * 0.5 // Penalización moderada por inercia
+  const deamEQ = Math.round(100 * weightedSum * inertiaPenalty)
 
   // Calcular tendencias vs periodo anterior
   let deamTrend = 0

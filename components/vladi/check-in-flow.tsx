@@ -27,6 +27,7 @@ export function CheckInFlow({ onComplete, onCancel }: CheckInFlowProps) {
     setIntensity,
     setOnsetBucket,
     setPhysicalState,
+    togglePhysicalFlag,
     setContext,
     setContextText,
     setInterventionDelta,
@@ -112,8 +113,10 @@ export function CheckInFlow({ onComplete, onCancel }: CheckInFlowProps) {
               <OnsetPicker
                 selectedOnset={state.onsetBucket}
                 selectedPhysical={state.physicalState}
+                selectedFlags={state.physicalFlags}
                 onOnsetSelect={setOnsetBucket}
                 onPhysicalSelect={setPhysicalState}
+                onFlagToggle={togglePhysicalFlag}
                 isNegativeEmotion={state.selectedEmotion?.valence === "negative"}
               />
             )}

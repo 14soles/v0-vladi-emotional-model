@@ -227,10 +227,16 @@ export function IEQView({
                 </button>
               </div>
               <div className="flex items-baseline gap-2">
-                <span className="text-4xl font-bold text-gray-900">{deamMetrics.deamEQ}</span>
-                <span className="text-gray-500 text-lg">/100</span>
+                {deamMetrics.deamEQ !== null ? (
+                  <>
+                    <span className="text-4xl font-bold text-gray-900">{deamMetrics.deamEQ}</span>
+                    <span className="text-gray-500 text-lg">/100</span>
+                  </>
+                ) : (
+                  <span className="text-2xl font-medium text-gray-400">Calibrando...</span>
+                )}
               </div>
-              {deamMetrics.deamTrend !== 0 && (
+              {deamMetrics.deamEQ !== null && deamMetrics.deamTrend !== 0 && (
                 <div className={`mt-3 inline-flex items-center gap-1 px-2 py-1 rounded-full ${
                   deamMetrics.deamTrend > 0 ? "bg-green-100" : "bg-red-100"
                 }`}>
@@ -257,10 +263,19 @@ export function IEQView({
                 </button>
               </div>
               <div className="flex items-baseline gap-2">
-                <span className="text-4xl font-bold text-gray-900">{deamMetrics.inertiaData.avgRecoveryTimeFormatted}</span>
+                {deamMetrics.Ie !== null ? (
+                  <span className="text-4xl font-bold text-gray-900">{deamMetrics.inertiaData.avgRecoveryTimeFormatted}</span>
+                ) : (
+                  <span className="text-2xl font-medium text-gray-400">Calibrando...</span>
+                )}
               </div>
-              <p className="text-xs text-gray-500 mt-1">Recup. Promedio</p>
-              {deamMetrics.inertiaData.trendHoursDiff !== 0 && (
+              <p className="text-xs text-gray-500 mt-1">
+                {deamMetrics.Ie !== null ? "Recup. Promedio" : "Necesitas 1 episodio"}
+                {deamMetrics.Ie !== null && !deamMetrics.Ie_reliable && (
+                  <span className="ml-1 text-amber-500">(baja confianza)</span>
+                )}
+              </p>
+              {deamMetrics.Ie !== null && deamMetrics.inertiaData.trendHoursDiff !== 0 && (
                 <div className={`mt-3 inline-flex items-center gap-1 px-2 py-1 rounded-full ${
                   deamMetrics.inertiaData.trendHoursDiff < 0 ? "bg-green-100" : "bg-red-100"
                 }`}>
@@ -314,33 +329,59 @@ export function IEQView({
             </div>
           </div>
 
-          {/* Métricas GPCA en mini grid */}
+          {/* Métricas GHCA en mini grid (G, H, C, A) */}
           <div className="grid grid-cols-4 gap-2 text-center">
             <CalibrationIndicator calibration={deamMetrics.calibration.granularity} size="sm">
               <div className="p-2 rounded-xl bg-gray-50">
-                <span className="text-lg font-bold text-gray-900">{Math.round(deamMetrics.G * 100)}</span>
+                {deamMetrics.G !== null ? (
+                  <span className="text-lg font-bold text-gray-900">{Math.round(deamMetrics.G * 100)}</span>
+                ) : (
+                  <span className="text-sm text-gray-400">--</span>
+                )}
                 <p className="text-xs text-gray-500">G</p>
               </div>
             </CalibrationIndicator>
-            <CalibrationIndicator calibration={deamMetrics.calibration.perception} size="sm">
+            <CalibrationIndicator calibration={deamMetrics.calibration.adherence} size="sm">
               <div className="p-2 rounded-xl bg-gray-50">
-                <span className="text-lg font-bold text-gray-900">{Math.round(deamMetrics.P * 100)}</span>
-                <p className="text-xs text-gray-500">P</p>
+                {deamMetrics.H !== null ? (
+                  <span className="text-lg font-bold text-gray-900">{Math.round(deamMetrics.H * 100)}</span>
+                ) : (
+                  <span className="text-sm text-gray-400">--</span>
+                )}
+                <p className="text-xs text-gray-500">H</p>
               </div>
             </CalibrationIndicator>
             <CalibrationIndicator calibration={deamMetrics.calibration.consciousness} size="sm">
               <div className="p-2 rounded-xl bg-gray-50">
-                <span className="text-lg font-bold text-gray-900">{Math.round(deamMetrics.C * 100)}</span>
+                {deamMetrics.C !== null ? (
+                  <span className="text-lg font-bold text-gray-900">{Math.round(deamMetrics.C * 100)}</span>
+                ) : (
+                  <span className="text-sm text-gray-400">--</span>
+                )}
                 <p className="text-xs text-gray-500">C</p>
               </div>
             </CalibrationIndicator>
             <CalibrationIndicator calibration={deamMetrics.calibration.adaptability} size="sm">
               <div className="p-2 rounded-xl bg-gray-50">
-                <span className="text-lg font-bold text-gray-900">{Math.round(deamMetrics.A * 100)}</span>
+                {deamMetrics.A !== null ? (
+                  <>
+                    <span className="text-lg font-bold text-gray-900">{Math.round(deamMetrics.A * 100)}</span>
+                    {deamMetrics.A_lowConfidence && (
+                      <span className="text-xs text-amber-500 block">*</span>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-sm text-gray-400">--</span>
+                )}
                 <p className="text-xs text-gray-500">A</p>
               </div>
             </CalibrationIndicator>
           </div>
+          
+          {/* Leyenda si hay confianza baja */}
+          {deamMetrics.A !== null && deamMetrics.A_lowConfidence && (
+            <p className="text-xs text-amber-600 mt-2">* Confianza baja (menos de 3 intervenciones)</p>
+          )}
         </div>
 
         {/* Bloque 2.7: Ranking de intervenciones */}

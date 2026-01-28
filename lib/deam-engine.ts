@@ -11,14 +11,15 @@ export const DEAM_DEFINITIONS = {
     branch: "Rama 1 - Mayer & Salovey: Percepción emocional",
     formula: "G = entropia_normalizada(etiquetas) * penalizacion_repeticion",
   },
-  p: {
-    name: "Percepción Emocional",
-    shortName: "P",
+  h: {
+    name: "Constancia (Adherencia)",
+    shortName: "H",
     description:
       "Frecuencia y consistencia con la que registras tus emociones. Mide tu adherencia al automonitoreo emocional activo.",
     branch: "Rama 1 - Mayer & Salovey: Percepción emocional",
-    formula: "P = min(1, registros_actuales / registros_esperados)",
+    formula: "H = min(1, dias_activos / dias_esperados)",
   },
+  // P (Percepción externa) reservado para microtests futuros - no mostrar aún
   c: {
     name: "Conciencia Contextual",
     shortName: "C",
@@ -46,13 +47,13 @@ export const DEAM_DEFINITIONS = {
 }
 
 // Pesos calibrados para la fórmula DEAM EQ compuesta
-// Fórmula: EQ = 100 * (αG + βP + γC + δA) * (1 - Ie')
-// Donde Ie' es la inercia normalizada (0-1)
+// Fórmula: EQ = 100 * (αG + βH + γC + δA) * (1 - Ie')
+// Donde H = Adherencia/Constancia, Ie' = inercia normalizada (0-1)
 const WEIGHTS = {
-  alpha: 0.20, // Granularidad - importancia moderada
-  beta: 0.15,  // Percepción/Adherencia - base necesaria
-  gamma: 0.25, // Conciencia Contextual - comprensión emocional
-  delta: 0.40, // Adaptabilidad - mayor peso porque regulación es clave
+  alpha: 0.20, // G - Granularidad - importancia moderada
+  beta: 0.15,  // H - Adherencia/Constancia - base necesaria
+  gamma: 0.25, // C - Conciencia Contextual - comprensión emocional
+  delta: 0.40, // A - Adaptabilidad - mayor peso porque regulación es clave
 }
 
 // Configuración de adherencia por defecto
@@ -65,40 +66,51 @@ export const DEFAULT_ADHERENCE_CONFIG = {
 }
 
 // ============================================
-// DATA GATING THRESHOLDS - Umbrales mínimos para mostrar métricas
-// Basado en especificaciones del documento DEAM EQ v2
+// DATA GATING THRESHOLDS - Umbrales EXACTOS para mostrar métricas
+// Si no se cumple min → valor NULL y UI muestra "Calibrando"
 // ============================================
 export const DATA_GATING_THRESHOLDS = {
-  // Umbrales para mostrar cada métrica (número mínimo de registros)
+  // G (Granularidad): min 5 check-ins
   granularity: {
-    min: 7,           // Mínimo 7 registros para calcular G (1 semana)
-    optimal: 21,      // Óptimo para cálculo fiable (3 semanas)
-    message: "Necesitas al menos 7 registros para calcular tu granularidad emocional"
+    min: 5,           // Mínimo 5 registros para calcular G
+    optimal: 15,      // Óptimo para cálculo fiable
+    message: "Necesitas al menos 5 registros para calcular tu granularidad emocional"
   },
-  perception: {
-    min: 7,           // Mínimo 7 días de adherencia para calcular P
+  // H (Adherencia/Constancia): calculado por días activos, no por registros
+  // Se calcula aparte con periodDays
+  adherence: {
+    min: 7,           // Mínimo 7 días de uso
     optimal: 14,      // Óptimo para cálculo fiable (2 semanas)
-    message: "Necesitas al menos 7 días de uso para calcular tu percepción"
+    message: "Necesitas al menos 7 días de uso para calcular tu constancia"
   },
+  // C (Conciencia): min 5 check-ins con contexto
   consciousness: {
     min: 5,           // Mínimo 5 registros con contexto
     optimal: 15,      // Óptimo para cálculo fiable
     message: "Necesitas al menos 5 registros con contexto para calcular tu conciencia"
   },
+  // A (Adaptabilidad): min 1 intervención done con post-check (NULL si <1)
+  // "Confianza baja" hasta 3, pero NO bloquear
   adaptability: {
-    min: 3,           // Mínimo 3 intervenciones completadas
+    min: 1,           // Mínimo 1 intervención con post-check
+    lowConfidence: 3, // Menos de 3 = "confianza baja"
     optimal: 7,       // Óptimo para cálculo fiable
-    message: "Necesitas completar al menos 3 intervenciones para calcular tu adaptabilidad"
+    message: "Necesitas completar al menos 1 intervención para calcular tu adaptabilidad"
   },
+  // Ie (Inercia): min 1 episodio recuperable (NULL si <1)
+  // A partir de 2 marcar como "más fiable"
   inertia: {
-    min: 2,           // Mínimo 2 episodios con onset_bucket válido
+    min: 1,           // Mínimo 1 episodio recuperable
+    reliable: 2,      // A partir de 2 es "más fiable"
     optimal: 5,       // Óptimo para cálculo fiable
-    message: "Necesitas al menos 2 episodios de recuperación para calcular tu inercia"
+    message: "Necesitas al menos 1 episodio de recuperación para calcular tu inercia"
   },
+  // Score DEAM EQ: min 10 check-ins O 7 días (lo que ocurra antes)
   deamEQ: {
-    min: 10,          // Mínimo 10 registros para mostrar EQ compuesto
+    min: 10,          // Mínimo 10 registros
+    minDays: 7,       // O mínimo 7 días
     optimal: 21,      // Óptimo (3 semanas de datos)
-    message: "Necesitas al menos 10 registros para calcular tu DEAM EQ"
+    message: "Necesitas al menos 10 registros o 7 días de uso para calcular tu DEAM EQ"
   }
 }
 
@@ -118,11 +130,11 @@ export interface MetricCalibration {
 }
 
 export interface DEAMCalibrationStatus {
-  granularity: MetricCalibration
-  perception: MetricCalibration
-  consciousness: MetricCalibration
-  adaptability: MetricCalibration
-  inertia: MetricCalibration
+  granularity: MetricCalibration      // G
+  adherence: MetricCalibration        // H (antes P)
+  consciousness: MetricCalibration    // C
+  adaptability: MetricCalibration & { lowConfidence: boolean }  // A
+  inertia: MetricCalibration & { reliable: boolean }            // Ie
   deamEQ: MetricCalibration
   overallState: CalibrationState
   overallProgress: number
@@ -144,19 +156,15 @@ export function calculateCalibrationStatus(
            (e.social_tags && e.social_tags.length > 0)
   ).length
   
-  // Intervenciones completadas (usando intervention_done si existe, fallback a intensity_after)
+  // Intervenciones completadas con post-check (intervention_done=true Y intensity_after)
   const entriesWithIntervention = entries.filter(
-    (e) => e.intervention_done === true || 
-           (e.intensity_after !== undefined && e.intervention_type)
+    (e) => e.intervention_done === true && e.intensity_after !== undefined
   ).length
   
-  // Episodios con onset_bucket válido para calcular inercia
-  // Si no hay onset_bucket, fallback a picos negativos
-  const entriesWithOnset = entries.filter(
-    (e) => e.onset_bucket !== undefined && e.onset_bucket !== null
-  ).length
-  const negativePeaks = entriesWithOnset > 0 ? entriesWithOnset : entries.filter(
-    (e) => (e.quadrant === "red" || e.quadrant === "blue") && (e.intensity || 5) >= 7
+  // Episodios recuperables para inercia (picos negativos con onset válido o sin él)
+  const recoverableEpisodes = entries.filter(
+    (e) => (e.quadrant === "red" || e.quadrant === "blue") && 
+           (e.intensity || e.intensity_before || 5) >= 7
   ).length
 
   const getCalibration = (
@@ -184,15 +192,54 @@ export function calculateCalibrationStatus(
     }
   }
 
+  // G: min 5 check-ins
   const granularity = getCalibration(totalEntries, DATA_GATING_THRESHOLDS.granularity)
-  const perception = getCalibration(totalEntries, DATA_GATING_THRESHOLDS.perception)
+  
+  // H: min 7 días (usamos periodDays como aproximación)
+  const adherence = getCalibration(
+    Math.min(periodDays, totalEntries), // días con al menos 1 registro
+    DATA_GATING_THRESHOLDS.adherence
+  )
+  
+  // C: min 5 con contexto
   const consciousness = getCalibration(entriesWithContext, DATA_GATING_THRESHOLDS.consciousness)
-  const adaptability = getCalibration(entriesWithIntervention, DATA_GATING_THRESHOLDS.adaptability)
-  const inertia = getCalibration(negativePeaks, DATA_GATING_THRESHOLDS.inertia)
-  const deamEQ = getCalibration(totalEntries, DATA_GATING_THRESHOLDS.deamEQ)
+  
+  // A: min 1 intervención done+post-check, lowConfidence si <3
+  const adaptabilityBase = getCalibration(entriesWithIntervention, {
+    min: DATA_GATING_THRESHOLDS.adaptability.min,
+    optimal: DATA_GATING_THRESHOLDS.adaptability.optimal,
+    message: DATA_GATING_THRESHOLDS.adaptability.message
+  })
+  const adaptability = {
+    ...adaptabilityBase,
+    lowConfidence: entriesWithIntervention < (DATA_GATING_THRESHOLDS.adaptability.lowConfidence || 3)
+  }
+  
+  // Ie: min 1 episodio recuperable, reliable si >=2
+  const inertiaBase = getCalibration(recoverableEpisodes, {
+    min: DATA_GATING_THRESHOLDS.inertia.min,
+    optimal: DATA_GATING_THRESHOLDS.inertia.optimal,
+    message: DATA_GATING_THRESHOLDS.inertia.message
+  })
+  const inertia = {
+    ...inertiaBase,
+    reliable: recoverableEpisodes >= (DATA_GATING_THRESHOLDS.inertia.reliable || 2)
+  }
+  
+  // DEAM EQ: min 10 check-ins O 7 días (lo que ocurra antes)
+  const meetsEQMin = totalEntries >= DATA_GATING_THRESHOLDS.deamEQ.min || 
+                     periodDays >= (DATA_GATING_THRESHOLDS.deamEQ.minDays || 7)
+  const deamEQ: MetricCalibration = {
+    state: meetsEQMin ? (totalEntries >= DATA_GATING_THRESHOLDS.deamEQ.optimal ? "stable" : "calibrating") : "insufficient",
+    current: totalEntries,
+    min: DATA_GATING_THRESHOLDS.deamEQ.min,
+    optimal: DATA_GATING_THRESHOLDS.deamEQ.optimal,
+    progress: Math.min(100, Math.round((totalEntries / DATA_GATING_THRESHOLDS.deamEQ.optimal) * 100)),
+    message: meetsEQMin ? "Datos suficientes" : DATA_GATING_THRESHOLDS.deamEQ.message
+  }
 
   // Estado general: el más restrictivo
-  const states = [granularity, perception, consciousness, adaptability, inertia, deamEQ]
+  const states = [granularity, adherence, consciousness, adaptability, inertia, deamEQ]
   let overallState: CalibrationState = "stable"
   if (states.some(s => s.state === "insufficient")) {
     overallState = "insufficient"
@@ -202,13 +249,13 @@ export function calculateCalibrationStatus(
 
   // Progreso general: promedio ponderado
   const overallProgress = Math.round(
-    (granularity.progress + perception.progress + consciousness.progress + 
+    (granularity.progress + adherence.progress + consciousness.progress + 
      adaptability.progress + inertia.progress + deamEQ.progress) / 6
   )
 
   return {
     granularity,
-    perception,
+    adherence,
     consciousness,
     adaptability,
     inertia,
@@ -230,15 +277,17 @@ export interface InertiaData {
 }
 
 export interface DEAMMetrics {
-  G: number // Granularidad (0-1)
-  P: number // Percepción (0-1)
-  C: number // Conciencia (0-1)
-  A: number // Adaptabilidad (0-1)
-  Ie: number // Inercia Emocional (0-1)
-  deamEQ: number // Índice compuesto (0-100)
-  deamTrend: number // Tendencia vs periodo anterior
-  inertiaTrend: number // Tendencia de inercia
-  inertiaPeaks: Date[] // Picos de inercia detectados
+  G: number | null      // Granularidad (0-1) - NULL si <5 check-ins
+  H: number | null      // Adherencia/Constancia (0-1) - NULL si <7 días
+  C: number | null      // Conciencia (0-1) - NULL si <5 con contexto
+  A: number | null      // Adaptabilidad (0-1) - NULL si <1 intervención done
+  A_lowConfidence: boolean // true si A tiene menos de 3 intervenciones
+  Ie: number | null     // Inercia Emocional (0-1) - NULL si <1 episodio
+  Ie_reliable: boolean  // true si Ie tiene 2+ episodios
+  deamEQ: number | null // Índice compuesto (0-100) - NULL si no cumple min
+  deamTrend: number     // Tendencia vs periodo anterior
+  inertiaTrend: number  // Tendencia de inercia
+  inertiaPeaks: Date[]  // Picos de inercia detectados
   inertiaData: InertiaData // Datos detallados de inercia
   climate: {
     green: number
@@ -256,19 +305,20 @@ export interface DEAMMetrics {
     count: number
     avgIntensity: number
   }[]
-  adherence: number // Porcentaje de adherencia
+  adherence: number     // Porcentaje de adherencia (raw)
   uniqueEmotions: string[]
   calibration: DEAMCalibrationStatus // Estado de calibración de cada métrica
 }
 
-// Mapeo de onset_bucket a minutos estimados (punto medio del rango)
+// Mapeo EXACTO de onset_bucket a minutos (especificado en documento)
+// Si onset es null, no usar en inercia (fallback a 0 o no computar)
 const ONSET_BUCKET_MINUTES: Record<string, number> = {
-  "just_now": 5,        // 0-10 min
-  "10_30_min": 20,      // 10-30 min
-  "30_60_min": 45,      // 30-60 min
-  "1_3_hours": 120,     // 1-3 horas
-  "3_plus_hours": 240,  // 3+ horas (estimado 4h)
-  "unknown": 60,        // Desconocido (1h por defecto)
+  "just_now": 0,        // just_now → 0 min
+  "10_30_min": 20,      // 10_30min → 20 min
+  "30_60_min": 45,      // 30_60min → 45 min
+  "1_3_hours": 120,     // 1_3h → 120 min (2 horas)
+  "3_plus_hours": 240,  // 3h_plus → 240 min (4 horas)
+  // "unknown" NO se mapea - se ignora en cálculo de inercia
 }
 
 function calculateInertiaData(entries: EmotionEntry[], previousEntries: EmotionEntry[] | null = null): InertiaData {
@@ -429,12 +479,14 @@ export function calculateDEAMMetrics(
   const calibration = calculateCalibrationStatus(currentEntries || [], periodDays)
 
   const defaultMetrics: DEAMMetrics = {
-    G: 0,
-    P: 0,
-    C: 0,
-    A: 0,
-    Ie: 0.5,
-    deamEQ: 0,
+    G: null,              // NULL hasta 5 check-ins
+    H: null,              // NULL hasta 7 días
+    C: null,              // NULL hasta 5 con contexto
+    A: null,              // NULL hasta 1 intervención done
+    A_lowConfidence: true,
+    Ie: null,             // NULL hasta 1 episodio recuperable
+    Ie_reliable: false,
+    deamEQ: null,         // NULL hasta cumplir min
     deamTrend: 0,
     inertiaTrend: 0,
     inertiaPeaks: [],
@@ -489,11 +541,11 @@ export function calculateDEAMMetrics(
   const G = normalizedEntropyLabels * (1 - 0.35 * repeatPenalty)
 
   // ============================================
-  // 2. PERCEPCION (P) - Adherencia al automonitoreo
-  // Formula: P = min(1, registros_actuales / registros_esperados)
+  // 2. ADHERENCIA/CONSTANCIA (H) - Adherencia al automonitoreo
+  // Formula: H = min(1, dias_activos / dias_esperados)
   // ============================================
   const expectedEntries = periodDays * config.targetCheckinsPerDay
-  const P = Math.min(1, currentEntries.length / expectedEntries)
+  const H_raw = Math.min(1, currentEntries.length / expectedEntries)
 
   // ============================================
   // 3. CONCIENCIA CONTEXTUAL (C) - Triggers y contextos
@@ -643,32 +695,54 @@ export function calculateDEAMMetrics(
     .slice(0, 5)
 
   // ============================================
-  // CALCULO DEL INDICE DEAM EQ COMPUESTO
-  // Formula: EQ = 100 * (αG + βP + γC + δA) * (1 - Ie')
-  // Donde:
-  //   α = 0.20 (Granularidad)
-  //   β = 0.15 (Percepción/Adherencia)
-  //   γ = 0.25 (Conciencia Contextual)
-  //   δ = 0.40 (Adaptabilidad - mayor peso porque regulación es clave)
-  //   Ie' = inercia normalizada (0-1)
-  // 
-  // El factor (1 - Ie') actúa como penalizador:
-  //   - Ie = 0 (sin inercia) -> multiplica por 1.0
-  //   - Ie = 0.5 (inercia media) -> multiplica por 0.5
-  //   - Ie = 1 (máxima inercia) -> multiplica por 0
+  // APLICAR DATA GATING - Valores NULL si no hay datos suficientes
   // ============================================
-  const weightedSum = WEIGHTS.alpha * G + WEIGHTS.beta * P + WEIGHTS.gamma * C + WEIGHTS.delta * A
-  const inertiaPenalty = 1 - Ie * 0.5 // Penalización moderada por inercia
-  const deamEQ = Math.round(100 * weightedSum * inertiaPenalty)
+  
+  // G: NULL si <5 check-ins
+  const G_final = calibration.granularity.state === "insufficient" ? null : G
+  
+  // H: NULL si <7 días
+  const H_final = calibration.adherence.state === "insufficient" ? null : H_raw
+  
+  // C: NULL si <5 con contexto
+  const C_final = calibration.consciousness.state === "insufficient" ? null : C
+  
+  // A: NULL si <1 intervención done, lowConfidence si <3
+  const A_final = calibration.adaptability.state === "insufficient" ? null : A
+  const A_lowConfidence = calibration.adaptability.lowConfidence
+  
+  // Ie: NULL si <1 episodio, reliable si >=2
+  const Ie_final = calibration.inertia.state === "insufficient" ? null : Ie
+  const Ie_reliable = calibration.inertia.reliable
+
+  // ============================================
+  // CALCULO DEL INDICE DEAM EQ COMPUESTO
+  // Formula: EQ = 100 * (αG + βH + γC + δA) * (1 - Ie')
+  // Solo si cumple min (10 check-ins O 7 días)
+  // ============================================
+  let deamEQ_final: number | null = null
+  
+  if (calibration.deamEQ.state !== "insufficient") {
+    // Usar valores no-null para el cálculo, con fallbacks conservadores
+    const G_calc = G_final ?? 0.5
+    const H_calc = H_final ?? 0.5
+    const C_calc = C_final ?? 0.5
+    const A_calc = A_final ?? 0.5
+    const Ie_calc = Ie_final ?? 0.5
+    
+    const weightedSum = WEIGHTS.alpha * G_calc + WEIGHTS.beta * H_calc + WEIGHTS.gamma * C_calc + WEIGHTS.delta * A_calc
+    const inertiaPenalty = 1 - Ie_calc * 0.5 // Penalización moderada por inercia
+    deamEQ_final = Math.round(100 * weightedSum * inertiaPenalty)
+  }
 
   // Calcular tendencias vs periodo anterior
   let deamTrend = 0
   let inertiaTrend = 0
 
-  if (previousEntries && previousEntries.length > 0) {
+  if (previousEntries && previousEntries.length > 0 && deamEQ_final !== null) {
     const prevMetrics = calculateDEAMMetricsSimple(previousEntries, periodDays)
-    deamTrend = deamEQ - prevMetrics.deamEQ
-    inertiaTrend = Math.round((Ie - prevMetrics.Ie) * 100)
+    deamTrend = deamEQ_final - prevMetrics.deamEQ
+    inertiaTrend = Ie_final !== null ? Math.round((Ie_final - prevMetrics.Ie) * 100) : 0
   }
 
   // Adherencia (porcentaje de días con al menos un registro)
@@ -676,12 +750,14 @@ export function calculateDEAMMetrics(
   const adherence = Math.round((daysWithEntries / periodDays) * 100)
 
   return {
-    G,
-    P,
-    C,
-    A,
-    Ie,
-    deamEQ,
+    G: G_final,
+    H: H_final,
+    C: C_final,
+    A: A_final,
+    A_lowConfidence,
+    Ie: Ie_final,
+    Ie_reliable,
+    deamEQ: deamEQ_final,
     deamTrend,
     inertiaTrend,
     inertiaPeaks,
@@ -757,29 +833,29 @@ export function generateInsights(metrics: DEAMMetrics | null | undefined): strin
     return insights
   }
 
-  if (metrics.G > 0.7) {
+  if (metrics.G !== null && metrics.G > 0.7) {
     insights.push("Tu vocabulario emocional es rico y diverso. Esto te permite expresar con precisión lo que sientes.")
-  } else if (metrics.G < 0.3 && metrics.P > 0.3) {
+  } else if (metrics.G !== null && metrics.G < 0.3 && metrics.H !== null && metrics.H > 0.3) {
     insights.push(
       "Podrías beneficiarte de explorar más matices emocionales. Intenta identificar emociones más específicas.",
     )
   }
 
-  if (metrics.Ie > 0.6) {
+  if (metrics.Ie !== null && metrics.Ie > 0.6) {
     insights.push(
       "Las emociones negativas tienden a persistir más tiempo. Las intervenciones de regulación podrían ayudarte.",
     )
-  } else if (metrics.Ie < 0.3) {
+  } else if (metrics.Ie !== null && metrics.Ie < 0.3) {
     insights.push("Tu capacidad de recuperación emocional es excelente. Te recuperas rápido de los estados negativos.")
   }
 
-  if (metrics.A > 0.7) {
+  if (metrics.A !== null && metrics.A > 0.7) {
     insights.push("Las intervenciones que utilizas están siendo muy efectivas para regular tus emociones.")
   }
 
-  if (metrics.C > 0.7) {
+  if (metrics.C !== null && metrics.C > 0.7) {
     insights.push("Tienes una excelente conciencia de los contextos que influyen en tus emociones.")
-  } else if (metrics.C < 0.3 && metrics.P > 0.3) {
+  } else if (metrics.C !== null && metrics.C < 0.3 && metrics.H !== null && metrics.H > 0.3) {
     insights.push("Añadir notas y etiquetas a tus registros te ayudará a identificar patrones emocionales.")
   }
 
@@ -804,19 +880,19 @@ export function generateRecommendations(metrics: DEAMMetrics | null | undefined)
     return recommendations
   }
 
-  if (metrics.P < 0.5) {
+  if (metrics.H !== null && metrics.H < 0.5) {
     recommendations.push("Intenta registrar tus emociones al menos 2 veces al día para obtener mejores insights.")
   }
 
-  if (metrics.Ie > 0.5) {
+  if (metrics.Ie !== null && metrics.Ie > 0.5) {
     recommendations.push("Practica la respiración 4-7-8 cuando sientas emociones negativas persistentes.")
   }
 
-  if (metrics.C < 0.5) {
+  if (metrics.C !== null && metrics.C < 0.5) {
     recommendations.push("Añade contexto a tus registros para descubrir qué situaciones afectan más tu bienestar.")
   }
 
-  if (metrics.A < 0.5 && metrics.interventionStats && metrics.interventionStats.length > 0) {
+  if (metrics.A !== null && metrics.A < 0.5 && metrics.interventionStats && metrics.interventionStats.length > 0) {
     recommendations.push("Explora diferentes tipos de intervenciones para encontrar las que mejor te funcionan.")
   }
 

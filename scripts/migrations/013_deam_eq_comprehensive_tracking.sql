@@ -8,14 +8,15 @@
 -- "¿Cuándo empezó esta emoción?"
 -- ============================================
 
--- Create enum for onset bucket
+-- Create enum for onset bucket (EXACT mapping from document)
+-- just_now → 0, 10_30_min → 20, 30_60_min → 45, 1_3_hours → 120, 3_plus_hours → 240
 DO $$ BEGIN
   CREATE TYPE onset_bucket_type AS ENUM (
-    'now',           -- Ahora mismo (0 min)
-    'less_1h',       -- Hace < 1 hora (30 min)
-    'hours_1_3',     -- Hace 1-3 horas (120 min)
-    'today',         -- Hoy (480 min)
-    'yesterday'      -- Ayer (1440 min)
+    'just_now',      -- Ahora mismo → 0 min
+    '10_30_min',     -- Hace 10-30 min → 20 min
+    '30_60_min',     -- Hace 30-60 min → 45 min
+    '1_3_hours',     -- Hace 1-3 horas → 120 min
+    '3_plus_hours'   -- Más de 3 horas → 240 min
   );
 EXCEPTION
   WHEN duplicate_object THEN null;
@@ -28,6 +29,7 @@ ALTER TABLE public.emotion_entries
   ADD COLUMN IF NOT EXISTS onset_estimated_minutes SMALLINT;
 
 -- Trigger to auto-populate onset_estimated_minutes from onset_bucket
+-- EXACT mapping: just_now=0, 10_30_min=20, 30_60_min=45, 1_3_hours=120, 3_plus_hours=240
 CREATE OR REPLACE FUNCTION public.populate_onset_minutes()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -35,11 +37,11 @@ AS $$
 BEGIN
   IF NEW.onset_bucket IS NOT NULL AND NEW.onset_estimated_minutes IS NULL THEN
     NEW.onset_estimated_minutes := CASE NEW.onset_bucket
-      WHEN 'now' THEN 0
-      WHEN 'less_1h' THEN 30
-      WHEN 'hours_1_3' THEN 120
-      WHEN 'today' THEN 480
-      WHEN 'yesterday' THEN 1440
+      WHEN 'just_now' THEN 0
+      WHEN '10_30_min' THEN 20
+      WHEN '30_60_min' THEN 45
+      WHEN '1_3_hours' THEN 120
+      WHEN '3_plus_hours' THEN 240
       ELSE NULL
     END;
   END IF;
@@ -61,6 +63,7 @@ COMMENT ON COLUMN public.emotion_entries.onset_estimated_minutes IS 'Estimated m
 -- "¿Cómo está tu cuerpo ahora?"
 -- ============================================
 
+-- Physical state: 3 levels (low | mid | high)
 DO $$ BEGIN
   CREATE TYPE physical_state_type AS ENUM ('low', 'mid', 'high');
 EXCEPTION
@@ -70,7 +73,12 @@ END $$;
 ALTER TABLE public.emotion_entries 
   ADD COLUMN IF NOT EXISTS physical_state physical_state_type;
 
-COMMENT ON COLUMN public.emotion_entries.physical_state IS 'Physical energy state: low (tired), mid, high';
+-- Physical flags: array for hungry/sick (separate from main enum)
+ALTER TABLE public.emotion_entries 
+  ADD COLUMN IF NOT EXISTS physical_flags TEXT[];
+
+COMMENT ON COLUMN public.emotion_entries.physical_state IS 'Physical energy state: low (tired/sin energia), mid (normal), high (con energia)';
+COMMENT ON COLUMN public.emotion_entries.physical_flags IS 'Additional physical flags: hungry, sick (do not affect main state)';
 
 -- ============================================
 -- 3. INTERVENTION TRACKING (complete traceability for Adaptability)

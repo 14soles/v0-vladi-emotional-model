@@ -9,16 +9,30 @@ import type { Emotion, ContextCategory } from "@/lib/vladi-types"
 export type CheckInStep = "emotion" | "intensity" | "onset" | "context" | "summary" | "intervention" | "complete"
 
 // Buckets para preguntar "¿Desde cuándo te sientes así?"
-export type OnsetBucket = "just_now" | "10_30_min" | "30_60_min" | "1_3_hours" | "3_plus_hours" | "unknown"
+// Mapping: just_now → 0, 10_30_min → 20, 30_60_min → 45, 1_3_hours → 120, 3_plus_hours → 240
+export type OnsetBucket = "just_now" | "10_30_min" | "30_60_min" | "1_3_hours" | "3_plus_hours"
 
-// Estado físico para separar fatiga de emociones
-export type PhysicalState = "rested" | "tired" | "sick" | "hungry" | "none"
+// Mapping exacto de onset a minutos
+export const ONSET_TO_MINUTES: Record<OnsetBucket, number> = {
+  just_now: 0,
+  "10_30_min": 20,
+  "30_60_min": 45,
+  "1_3_hours": 120,
+  "3_plus_hours": 240,
+}
+
+// Estado físico simplificado: low | mid | high
+export type PhysicalState = "low" | "mid" | "high"
+
+// Flags adicionales (hungry, sick) - no bloquean el enum principal
+export type PhysicalFlag = "hungry" | "sick"
 
 export interface CheckInState {
   selectedEmotion: Emotion | null
   intensity: number
   onsetBucket: OnsetBucket | null
   physicalState: PhysicalState | null
+  physicalFlags: PhysicalFlag[]
   context: ContextCategory | null
   contextText: string
   interventionDelta: number | null
@@ -31,6 +45,7 @@ export function useCheckInFlow(userId?: string) {
     intensity: 5,
     onsetBucket: null,
     physicalState: null,
+    physicalFlags: [],
     context: null,
     contextText: "",
     interventionDelta: null,
@@ -85,6 +100,15 @@ export function useCheckInFlow(userId?: string) {
     setState((prev) => ({ ...prev, physicalState: physState }))
   }, [])
 
+  const togglePhysicalFlag = useCallback((flag: PhysicalFlag) => {
+    setState((prev) => ({
+      ...prev,
+      physicalFlags: prev.physicalFlags.includes(flag)
+        ? prev.physicalFlags.filter(f => f !== flag)
+        : [...prev.physicalFlags, flag]
+    }))
+  }, [])
+
   const setInterventionDelta = useCallback((delta: number | null) => {
     setState((prev) => ({ ...prev, interventionDelta: delta }))
   }, [])
@@ -132,6 +156,7 @@ export function useCheckInFlow(userId?: string) {
       intensity: 5,
       onsetBucket: null,
       physicalState: null,
+      physicalFlags: [],
       context: null,
       contextText: "",
       interventionDelta: null,
@@ -172,6 +197,7 @@ export function useCheckInFlow(userId?: string) {
     setIntensity,
     setOnsetBucket,
     setPhysicalState,
+    togglePhysicalFlag,
     setContext,
     setContextText,
     setInterventionDelta,

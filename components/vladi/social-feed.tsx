@@ -394,35 +394,8 @@ export function SocialFeed({ userId, filterGroupId }: SocialFeedProps) {
 
       if (error) throw error
 
-      // Create notification for the entry owner or reply target
-      if (replyingTo) {
-        // This is a reply - notify the comment author we're replying to
-        const parentComment = comments.find(c => c.id === replyingTo.id) || 
-                             comments.flatMap(c => c.replies || []).find(r => r.id === replyingTo.id)
-        
-        if (parentComment && parentComment.author_id !== userId) {
-          await supabase.from("social_notifications").insert({
-            notification_type: "comment_reply",
-            from_user_id: userId,
-            to_user_id: parentComment.author_id,
-            entry_id: commentsModalId,
-            comment_id: data.id,
-            emotion_name: entry.emotion,
-          })
-        }
-      } else {
-        // This is a new comment - notify the entry owner
-        if (entry.user_id !== userId) {
-          await supabase.from("social_notifications").insert({
-            notification_type: "comment",
-            from_user_id: userId,
-            to_user_id: entry.user_id,
-            entry_id: commentsModalId,
-            comment_id: data.id,
-            emotion_name: entry.emotion,
-          })
-        }
-      }
+      // Note: Notifications are now handled automatically by database trigger
+      // (notify_emotion_comment function) to prevent duplicates
 
       // Reload comments
       await loadComments(commentsModalId)

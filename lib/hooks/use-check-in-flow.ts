@@ -6,11 +6,33 @@ import { useVladiStore } from "@/lib/vladi-store"
 import { useVladiCheckIn } from "./use-vladi-check-in"
 import type { Emotion, ContextCategory } from "@/lib/vladi-types"
 
-export type CheckInStep = "emotion" | "intensity" | "context" | "summary" | "intervention" | "complete"
+export type CheckInStep = "emotion" | "intensity" | "onset" | "context" | "summary" | "intervention" | "complete"
+
+// Buckets para preguntar "¿Desde cuándo te sientes así?"
+// Mapping: just_now → 0, 10_30_min → 20, 30_60_min → 45, 1_3_hours → 120, 3_plus_hours → 240
+export type OnsetBucket = "just_now" | "10_30_min" | "30_60_min" | "1_3_hours" | "3_plus_hours"
+
+// Mapping exacto de onset a minutos
+export const ONSET_TO_MINUTES: Record<OnsetBucket, number> = {
+  just_now: 0,
+  "10_30_min": 20,
+  "30_60_min": 45,
+  "1_3_hours": 120,
+  "3_plus_hours": 240,
+}
+
+// Estado físico simplificado: low | mid | high
+export type PhysicalState = "low" | "mid" | "high"
+
+// Flags adicionales (hungry, sick) - no bloquean el enum principal
+export type PhysicalFlag = "hungry" | "sick"
 
 export interface CheckInState {
   selectedEmotion: Emotion | null
   intensity: number
+  onsetBucket: OnsetBucket | null
+  physicalState: PhysicalState | null
+  physicalFlags: PhysicalFlag[]
   context: ContextCategory | null
   contextText: string
   interventionDelta: number | null
@@ -21,6 +43,9 @@ export function useCheckInFlow(userId?: string) {
   const [state, setState] = useState<CheckInState>({
     selectedEmotion: null,
     intensity: 5,
+    onsetBucket: null,
+    physicalState: null,
+    physicalFlags: [],
     context: null,
     contextText: "",
     interventionDelta: null,
@@ -29,7 +54,8 @@ export function useCheckInFlow(userId?: string) {
   const { startCheckIn, updateCheckIn } = useVladiStore()
   const { saveCheckIn } = useVladiCheckIn(userId)
 
-  const steps: CheckInStep[] = ["emotion", "intensity", "context", "summary"]
+  // Nuevo flujo: emotion -> intensity -> onset (solo si negativo/alto) -> context -> summary
+  const steps: CheckInStep[] = ["emotion", "intensity", "onset", "context", "summary"]
   const currentStepIndex = steps.indexOf(step)
 
   const canProceed = useCallback(() => {
@@ -38,6 +64,9 @@ export function useCheckInFlow(userId?: string) {
         return state.selectedEmotion !== null
       case "intensity":
         return state.intensity >= 1 && state.intensity <= 10
+      case "onset":
+        // Onset es opcional pero recomendado
+        return true
       case "context":
         return true
       case "summary":
@@ -63,6 +92,23 @@ export function useCheckInFlow(userId?: string) {
     setState((prev) => ({ ...prev, contextText: text }))
   }, [])
 
+  const setOnsetBucket = useCallback((bucket: OnsetBucket | null) => {
+    setState((prev) => ({ ...prev, onsetBucket: bucket }))
+  }, [])
+
+  const setPhysicalState = useCallback((physState: PhysicalState | null) => {
+    setState((prev) => ({ ...prev, physicalState: physState }))
+  }, [])
+
+  const togglePhysicalFlag = useCallback((flag: PhysicalFlag) => {
+    setState((prev) => ({
+      ...prev,
+      physicalFlags: prev.physicalFlags.includes(flag)
+        ? prev.physicalFlags.filter(f => f !== flag)
+        : [...prev.physicalFlags, flag]
+    }))
+  }, [])
+
   const setInterventionDelta = useCallback((delta: number | null) => {
     setState((prev) => ({ ...prev, interventionDelta: delta }))
   }, [])
@@ -76,6 +122,11 @@ export function useCheckInFlow(userId?: string) {
         intensityBefore: state.intensity,
         contextCategory: state.context || "otro",
         contextText: state.contextText || undefined,
+        // Nuevos campos DEAM EQ v2
+        onsetBucket: state.onsetBucket || undefined,
+        onsetEstimatedMinutes: state.onsetBucket ? ONSET_TO_MINUTES[state.onsetBucket] : undefined,
+        physicalState: state.physicalState || undefined,
+        physicalFlags: state.physicalFlags.length > 0 ? state.physicalFlags : undefined,
       })
       setStep("complete")
 
@@ -108,6 +159,9 @@ export function useCheckInFlow(userId?: string) {
     setState({
       selectedEmotion: null,
       intensity: 5,
+      onsetBucket: null,
+      physicalState: null,
+      physicalFlags: [],
       context: null,
       contextText: "",
       interventionDelta: null,
@@ -132,6 +186,11 @@ export function useCheckInFlow(userId?: string) {
         intensity: state.intensity,
         context: state.context || undefined,
         contextText: state.contextText || undefined,
+        // Nuevos campos DEAM EQ v2
+        onsetBucket: state.onsetBucket || undefined,
+        onsetEstimatedMinutes: state.onsetBucket ? ONSET_TO_MINUTES[state.onsetBucket] : undefined,
+        physicalState: state.physicalState || undefined,
+        physicalFlags: state.physicalFlags.length > 0 ? state.physicalFlags : undefined,
       })
     } catch (error) {
       throw error
@@ -146,6 +205,9 @@ export function useCheckInFlow(userId?: string) {
     canProceed,
     setEmotion,
     setIntensity,
+    setOnsetBucket,
+    setPhysicalState,
+    togglePhysicalFlag,
     setContext,
     setContextText,
     setInterventionDelta,

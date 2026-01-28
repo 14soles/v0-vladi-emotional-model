@@ -6,6 +6,8 @@ import { supabase } from "@/lib/supabase/client"
 import { useVladiActions } from "@/lib/vladi-store"
 import type { EmotionData } from "./use-emotion-selector"
 
+import type { OnsetBucket, PhysicalState, PhysicalFlag } from "./use-check-in-flow"
+
 export interface CheckInData {
   emotion: EmotionData
   intensity: number
@@ -16,6 +18,11 @@ export interface CheckInData {
   certainty?: string
   activityContext?: boolean
   socialContext?: boolean
+  // Nuevos campos DEAM EQ v2
+  onsetBucket?: OnsetBucket
+  onsetEstimatedMinutes?: number
+  physicalState?: PhysicalState
+  physicalFlags?: PhysicalFlag[]
 }
 
 export function useVladiCheckIn(userId?: string) {
@@ -28,7 +35,7 @@ export function useVladiCheckIn(userId?: string) {
       }
 
       try {
-        // Save to Supabase
+        // Save to Supabase with new DEAM EQ v2 fields
         const { data: entry, error } = await supabase
           .from("emotion_entries")
           .insert({
@@ -44,6 +51,11 @@ export function useVladiCheckIn(userId?: string) {
             certainty_bucket: data.certainty,
             activity_context: data.activityContext,
             social_context: data.socialContext,
+            // Nuevos campos DEAM EQ v2
+            onset_bucket: data.onsetBucket,
+            onset_estimated_minutes: data.onsetEstimatedMinutes,
+            physical_state: data.physicalState,
+            physical_flags: data.physicalFlags,
             created_at: new Date().toISOString(),
           })
           .select()
@@ -51,7 +63,7 @@ export function useVladiCheckIn(userId?: string) {
 
         if (error) throw error
 
-        // Update local store
+        // Update local store with new fields
         addEntry({
           id: entry.id,
           timestamp: entry.created_at,
@@ -66,6 +78,11 @@ export function useVladiCheckIn(userId?: string) {
           contextTags: data.context ? [data.context] : [],
           context: data.context,
           privacy: "all",
+          // Nuevos campos DEAM EQ v2
+          onset_bucket: data.onsetBucket,
+          onset_estimated_minutes: data.onsetEstimatedMinutes,
+          physical_state: data.physicalState,
+          physical_flags: data.physicalFlags,
         })
 
         return entry

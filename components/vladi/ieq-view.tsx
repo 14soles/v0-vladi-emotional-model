@@ -4,7 +4,9 @@ import { useState, useMemo } from "react"
 import { ChevronDown, Info } from "lucide-react"
 import { useVladiStore } from "@/lib/vladi-store"
 import { calculateEmotionalState } from "@/lib/emotional-state-calculator"
+import { calculateDEAMMetrics, DATA_GATING_THRESHOLDS } from "@/lib/deam-engine"
 import { CommonHeader } from "./common-header"
+import { CalibrationOverlay, CalibrationIndicator } from "./calibration-indicator"
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts"
 
 type TimeRange = "7D" | "14D" | "30D"
@@ -50,6 +52,26 @@ export function IEQView({
   // Calcular estado emocional reciente
   const emotionalState = useMemo(() => {
     return calculateEmotionalState(entries, timeRange)
+  }, [entries, timeRange])
+
+  // Calcular métricas DEAM EQ
+  const deamMetrics = useMemo(() => {
+    const rangeDays = timeRange === "7D" ? 7 : timeRange === "14D" ? 14 : 30
+    const now = new Date()
+    const rangeMs = rangeDays * 24 * 60 * 60 * 1000
+    const prevRangeMs = rangeMs * 2
+
+    const currentEntries = entries.filter(
+      (e) => now.getTime() - new Date(e.timestamp).getTime() <= rangeMs
+    )
+    const previousEntries = entries.filter(
+      (e) => {
+        const age = now.getTime() - new Date(e.timestamp).getTime()
+        return age > rangeMs && age <= prevRangeMs
+      }
+    )
+
+    return calculateDEAMMetrics(currentEntries, previousEntries, rangeDays)
   }, [entries, timeRange])
 
   // Datos para el gráfico de intensidad y bienestar
@@ -193,50 +215,222 @@ export function IEQView({
 
         {/* Bloque 2: DEAM IEQ Score */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="bg-white rounded-3xl p-5 shadow-sm">
-            <div className="flex items-start justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-900">DEAM IEQ</h3>
-              <button
-                onClick={() => setShowInfoModal("deam_ieq")}
-                className="w-5 h-5 rounded-full border border-gray-300 flex items-center justify-center text-gray-400 hover:text-gray-600"
-              >
-                <Info className="w-3 h-3" />
-              </button>
+          <CalibrationOverlay calibration={deamMetrics.calibration.deamEQ}>
+            <div className="bg-white rounded-3xl p-5 shadow-sm">
+              <div className="flex items-start justify-between mb-3">
+                <h3 className="text-sm font-semibold text-gray-900">DEAM IEQ</h3>
+                <button
+                  onClick={() => setShowInfoModal("deam_ieq")}
+                  className="w-5 h-5 rounded-full border border-gray-300 flex items-center justify-center text-gray-400 hover:text-gray-600"
+                >
+                  <Info className="w-3 h-3" />
+                </button>
+              </div>
+              <div className="flex items-baseline gap-2">
+                {deamMetrics.deamEQ !== null ? (
+                  <>
+                    <span className="text-4xl font-bold text-gray-900">{deamMetrics.deamEQ}</span>
+                    <span className="text-gray-500 text-lg">/100</span>
+                  </>
+                ) : (
+                  <span className="text-2xl font-medium text-gray-400">Calibrando...</span>
+                )}
+              </div>
+              {deamMetrics.deamEQ !== null && deamMetrics.deamTrend !== 0 && (
+                <div className={`mt-3 inline-flex items-center gap-1 px-2 py-1 rounded-full ${
+                  deamMetrics.deamTrend > 0 ? "bg-green-100" : "bg-red-100"
+                }`}>
+                  <svg className={`w-3 h-3 ${deamMetrics.deamTrend > 0 ? "text-green-600" : "text-red-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={deamMetrics.deamTrend > 0 ? "M13 7l5 5m0 0l-5 5m5-5H6" : "M11 17l-5-5m0 0l5-5m-5 5h12"} />
+                  </svg>
+                  <span className={`text-xs font-medium ${deamMetrics.deamTrend > 0 ? "text-green-700" : "text-red-700"}`}>
+                    {deamMetrics.deamTrend > 0 ? "+" : ""}{deamMetrics.deamTrend} vs antes
+                  </span>
+                </div>
+              )}
             </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold text-gray-900">79</span>
-              <span className="text-gray-500 text-lg">/100</span>
+          </CalibrationOverlay>
+
+          <CalibrationOverlay calibration={deamMetrics.calibration.inertia}>
+            <div className="bg-white rounded-3xl p-5 shadow-sm">
+              <div className="flex items-start justify-between mb-3">
+                <h3 className="text-sm font-semibold text-gray-900">Inercia</h3>
+                <button
+                  onClick={() => setShowInfoModal("inertia")}
+                  className="w-5 h-5 rounded-full border border-gray-300 flex items-center justify-center text-gray-400 hover:text-gray-600"
+                >
+                  <Info className="w-3 h-3" />
+                </button>
+              </div>
+              <div className="flex items-baseline gap-2">
+                {deamMetrics.Ie !== null ? (
+                  <span className="text-4xl font-bold text-gray-900">{deamMetrics.inertiaData.avgRecoveryTimeFormatted}</span>
+                ) : (
+                  <span className="text-2xl font-medium text-gray-400">Calibrando...</span>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                {deamMetrics.Ie !== null ? "Recup. Promedio" : "Necesitas 1 episodio"}
+                {deamMetrics.Ie !== null && !deamMetrics.Ie_reliable && (
+                  <span className="ml-1 text-amber-500">(baja confianza)</span>
+                )}
+              </p>
+              {deamMetrics.Ie !== null && deamMetrics.inertiaData.trendHoursDiff !== 0 && (
+                <div className={`mt-3 inline-flex items-center gap-1 px-2 py-1 rounded-full ${
+                  deamMetrics.inertiaData.trendHoursDiff < 0 ? "bg-green-100" : "bg-red-100"
+                }`}>
+                  <svg className={`w-3 h-3 ${deamMetrics.inertiaData.trendHoursDiff < 0 ? "text-green-600" : "text-red-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={deamMetrics.inertiaData.trendHoursDiff < 0 ? "M19 14l-7 7m0 0l-7-7m7 7V3" : "M5 10l7-7m0 0l7 7m-7-7v18"} />
+                  </svg>
+                  <span className={`text-xs font-medium ${deamMetrics.inertiaData.trendHoursDiff < 0 ? "text-green-700" : "text-red-700"}`}>
+                    {deamMetrics.inertiaData.trendHoursDiff < 0 ? "" : "+"}{deamMetrics.inertiaData.trendHoursDiff.toFixed(1)}h vs antes
+                  </span>
+                </div>
+              )}
             </div>
-            <div className="mt-3 inline-flex items-center gap-1 px-2 py-1 bg-green-100 rounded-full">
-              <svg className="w-3 h-3 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-              </svg>
-              <span className="text-xs font-medium text-green-700">+19% vs antes</span>
+          </CalibrationOverlay>
+        </div>
+
+        {/* Bloque 2.5: Calibración general y métricas GPCA */}
+        <div className="bg-white rounded-3xl p-5 shadow-sm">
+          <div className="flex items-start justify-between mb-4">
+            <h3 className="text-sm font-semibold text-gray-900">Tu progreso de calibración</h3>
+            <button
+              onClick={() => setShowInfoModal("calibration")}
+              className="w-5 h-5 rounded-full border border-gray-300 flex items-center justify-center text-gray-400 hover:text-gray-600"
+            >
+              <Info className="w-3 h-3" />
+            </button>
+          </div>
+          
+          {/* Barra de progreso general */}
+          <div className="mb-4">
+            <div className="flex justify-between text-xs mb-1">
+              <span className="text-gray-500">
+                {deamMetrics.calibration.overallState === "stable" 
+                  ? "Calibrado" 
+                  : deamMetrics.calibration.overallState === "calibrating"
+                    ? "Calibrando..."
+                    : "Recopilando datos"}
+              </span>
+              <span className="font-medium text-gray-700">{deamMetrics.calibration.overallProgress}%</span>
+            </div>
+            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div 
+                className={`h-full rounded-full transition-all duration-500 ${
+                  deamMetrics.calibration.overallState === "stable" 
+                    ? "bg-green-500" 
+                    : deamMetrics.calibration.overallState === "calibrating"
+                      ? "bg-amber-500"
+                      : "bg-gray-400"
+                }`}
+                style={{ width: `${deamMetrics.calibration.overallProgress}%` }}
+              />
             </div>
           </div>
 
+          {/* Métricas GHCA en mini grid (G, H, C, A) */}
+          <div className="grid grid-cols-4 gap-2 text-center">
+            <CalibrationIndicator calibration={deamMetrics.calibration.granularity} size="sm">
+              <div className="p-2 rounded-xl bg-gray-50">
+                {deamMetrics.G !== null ? (
+                  <span className="text-lg font-bold text-gray-900">{Math.round(deamMetrics.G * 100)}</span>
+                ) : (
+                  <span className="text-sm text-gray-400">--</span>
+                )}
+                <p className="text-xs text-gray-500">G</p>
+              </div>
+            </CalibrationIndicator>
+            <CalibrationIndicator calibration={deamMetrics.calibration.adherence} size="sm">
+              <div className="p-2 rounded-xl bg-gray-50">
+                {deamMetrics.H !== null ? (
+                  <span className="text-lg font-bold text-gray-900">{Math.round(deamMetrics.H * 100)}</span>
+                ) : (
+                  <span className="text-sm text-gray-400">--</span>
+                )}
+                <p className="text-xs text-gray-500">H</p>
+              </div>
+            </CalibrationIndicator>
+            <CalibrationIndicator calibration={deamMetrics.calibration.consciousness} size="sm">
+              <div className="p-2 rounded-xl bg-gray-50">
+                {deamMetrics.C !== null ? (
+                  <span className="text-lg font-bold text-gray-900">{Math.round(deamMetrics.C * 100)}</span>
+                ) : (
+                  <span className="text-sm text-gray-400">--</span>
+                )}
+                <p className="text-xs text-gray-500">C</p>
+              </div>
+            </CalibrationIndicator>
+            <CalibrationIndicator calibration={deamMetrics.calibration.adaptability} size="sm">
+              <div className="p-2 rounded-xl bg-gray-50">
+                {deamMetrics.A !== null ? (
+                  <>
+                    <span className="text-lg font-bold text-gray-900">{Math.round(deamMetrics.A * 100)}</span>
+                    {deamMetrics.A_lowConfidence && (
+                      <span className="text-xs text-amber-500 block">*</span>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-sm text-gray-400">--</span>
+                )}
+                <p className="text-xs text-gray-500">A</p>
+              </div>
+            </CalibrationIndicator>
+          </div>
+          
+          {/* Leyenda si hay confianza baja */}
+          {deamMetrics.A !== null && deamMetrics.A_lowConfidence && (
+            <p className="text-xs text-amber-600 mt-2">* Confianza baja (menos de 3 intervenciones)</p>
+          )}
+        </div>
+
+        {/* Bloque 2.7: Ranking de intervenciones */}
+        {deamMetrics.interventionStats.length > 0 && (
           <div className="bg-white rounded-3xl p-5 shadow-sm">
-            <div className="flex items-start justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-900">Inercia</h3>
+            <div className="flex items-start justify-between mb-4">
+              <h3 className="text-sm font-semibold text-gray-900">Tus mejores herramientas</h3>
               <button
-                onClick={() => setShowInfoModal("inertia")}
+                onClick={() => setShowInfoModal("interventions")}
                 className="w-5 h-5 rounded-full border border-gray-300 flex items-center justify-center text-gray-400 hover:text-gray-600"
               >
                 <Info className="w-3 h-3" />
               </button>
             </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold text-gray-900">3.5h</span>
+            
+            <div className="space-y-3">
+              {deamMetrics.interventionStats
+                .sort((a, b) => b.avgDelta - a.avgDelta)
+                .slice(0, 4)
+                .map((stat, index) => (
+                  <div key={stat.type} className="flex items-center gap-3">
+                    <span className={`text-lg font-bold ${
+                      index === 0 ? "text-amber-500" : 
+                      index === 1 ? "text-gray-400" : 
+                      index === 2 ? "text-amber-700" : "text-gray-500"
+                    }`}>
+                      {index + 1}
+                    </span>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-900 capitalize">{stat.type}</p>
+                      <p className="text-xs text-gray-500">{stat.uses} usos</p>
+                    </div>
+                    <div className="text-right">
+                      <span className={`text-sm font-bold ${stat.avgDelta > 0 ? "text-green-600" : "text-gray-500"}`}>
+                        {stat.avgDelta > 0 ? "-" : ""}{Math.abs(stat.avgDelta).toFixed(1)}
+                      </span>
+                      <p className="text-xs text-gray-500">puntos</p>
+                    </div>
+                  </div>
+                ))}
             </div>
-            <p className="text-xs text-gray-500 mt-1">Recup. Promedio</p>
-            <div className="mt-3 inline-flex items-center gap-1 px-2 py-1 bg-green-100 rounded-full">
-              <svg className="w-3 h-3 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-              </svg>
-              <span className="text-xs font-medium text-green-700">-1.5h vs antes</span>
-            </div>
+            
+            {deamMetrics.interventionStats.length === 0 && (
+              <p className="text-sm text-gray-500 text-center py-4">
+                Completa intervenciones para ver cuáles funcionan mejor para ti
+              </p>
+            )}
           </div>
-        </div>
+        )}
 
         {/* Bloque 3: Intensidad y bienestar */}
         <div className="bg-white rounded-3xl p-5 shadow-sm">
@@ -343,16 +537,24 @@ export function IEQView({
                   ? "DEAM IEQ"
                   : showInfoModal === "inertia"
                     ? "Inercia Emocional"
-                    : "Intensidad y Bienestar"}
+                    : showInfoModal === "calibration"
+                      ? "Calibración del sistema"
+                      : showInfoModal === "interventions"
+                        ? "Ranking de herramientas"
+                        : "Intensidad y Bienestar"}
             </h3>
             <p className="text-sm text-gray-600 mb-4">
               {showInfoModal === "emotional_state"
-                ? "Este bloque resume cómo te has sentido en conjunto durante el periodo seleccionado. No muestra una emoción puntual ni un diagnóstico: es una tendencia basada en tus check-ins recientes, dando más peso a los más cercanos en el tiempo."
+                ? "Este bloque resume como te has sentido en conjunto durante el periodo seleccionado. No muestra una emocion puntual ni un diagnostico: es una tendencia basada en tus check-ins recientes, dando mas peso a los mas cercanos en el tiempo."
                 : showInfoModal === "deam_ieq"
-                  ? "El índice DEAM EQ mide tu inteligencia emocional basándose en granularidad, percepción, conciencia contextual, adaptabilidad e inercia emocional."
+                  ? "El indice DEAM EQ mide tu inteligencia emocional cuantificada. Se calcula con la formula: EQ = 100 * (0.20*G + 0.15*P + 0.25*C + 0.40*A) * (1 - Ie'), donde G=Granularidad, P=Percepcion/Adherencia, C=Conciencia Contextual, A=Adaptabilidad, e Ie=Inercia Emocional. Basado en el modelo de Mayer & Salovey de las 4 ramas de inteligencia emocional."
                   : showInfoModal === "inertia"
-                    ? "Tiempo promedio que tardas en recuperarte de estados emocionales negativos intensos. Un valor menor indica mejor capacidad de recuperación."
-                    : "Muestra la evolución de la intensidad de tus emociones y tu nivel de bienestar a lo largo del tiempo."}
+                    ? "La Inercia Emocional (Ie) mide cuanto tiempo tardan en disiparse tus estados negativos. Ahora usamos el tiempo de inicio (onset_bucket) que nos indicas en el check-in para calcular el tiempo real de la emoción, no solo desde el registro."
+                    : showInfoModal === "calibration"
+                      ? "El sistema necesita datos suficientes para calcular tus métricas con precisión. G (Granularidad): mínimo 7 registros. P (Percepción): 7 días de uso. C (Conciencia): 5 registros con contexto. A (Adaptabilidad): 3 intervenciones completadas. Cuando todas las métricas están calibradas, el DEAM EQ es confiable."
+                      : showInfoModal === "interventions"
+                        ? "Este ranking muestra qué herramientas han sido más efectivas para ti, medido por la reducción promedio de intensidad emocional después de usarlas. Cuanto mayor sea el número, más te ha ayudado esa técnica."
+                        : "Muestra la evolucion de dos metricas clave: Intensidad (energia de tus emociones, escala 0-100) y Bienestar (derivado de la valencia o pleasantness, escala 0-100). El grafico te ayuda a identificar patrones temporales en tu experiencia emocional."}
             </p>
             <button
               onClick={() => setShowInfoModal(null)}

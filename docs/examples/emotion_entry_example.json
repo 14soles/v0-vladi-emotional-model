@@ -1,0 +1,85 @@
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "user_id": "user_abc123",
+  "timestamp": "2026-01-28T14:30:00Z",
+  
+  "// DATOS EMOCIONALES BASICOS": "================",
+  "emotion": "ansiedad",
+  "quadrant": "red",
+  "pleasantness_user": 25,
+  "energy_user": 78,
+  "intensity_before": 7,
+  
+  "// NUEVOS CAMPOS DE ONSET (para calculo de inercia)": "================",
+  "onset_bucket": "30_60_min",
+  "onset_estimated_minutes": 45,
+  
+  "// ESTADO FISICO SIMPLIFICADO": "================",
+  "physical_state": "low",
+  "physical_flags": ["hungry"],
+  
+  "// CONTEXTO": "================",
+  "context_category": "trabajo",
+  "tags": ["deadline", "presion"],
+  "notes": "Tengo una presentación importante mañana y no me siento preparado. Llevo pensando en esto desde que salí de la reunión.",
+  
+  "// INTERVENCION COMPLETA": "================",
+  "intervention_suggested": "breathing",
+  "intervention_type": "breathing",
+  "intervention_done": true,
+  "intervention_skip_reason": null,
+  "intervention_post_check": true,
+  "intensity_after": 4,
+  
+  "// AI FEATURES (JSON estructurado)": "================",
+  "ai_features": {
+    "note_summary": "El usuario expresa ansiedad anticipatoria por una presentación laboral para la que no se siente preparado.",
+    
+    "trigger_categories": ["trabajo"],
+    "detected_topics": ["deadline", "presentacion", "preparacion"],
+    
+    "cognitive_patterns": ["catastrofismo", "rumiacion"],
+    
+    "needs": ["claridad", "seguridad", "descanso"],
+    
+    "risk_level": "low",
+    
+    "suggested_intervention_type": "breathing",
+    "intervention_confidence": 0.85,
+    
+    "xai_reason_codes": [
+      "high_arousal",
+      "low_pleasantness",
+      "anticipatory_anxiety",
+      "rumination_detected"
+    ],
+    "xai_explanation": "Se sugiere respiración porque hay alta activación (ansiedad) y el usuario necesita calma inmediata antes de abordar la preparación.",
+    
+    "inferred_emotions": [
+      { "emotion": "preocupacion", "confidence": 0.9 },
+      { "emotion": "inseguridad", "confidence": 0.75 }
+    ],
+    
+    "temporal_context": {
+      "is_recurring": false,
+      "urgency": "moderate",
+      "future_oriented": true,
+      "past_focused": false
+    },
+    
+    "physical_indicators": ["tension"],
+    
+    "social_context": {
+      "involves_others": true,
+      "relationship_type": "work",
+      "conflict_present": false
+    }
+  },
+  
+  "// XAI REASON CODES (array separado para queries)": "================",
+  "xai_reason_codes": ["high_arousal", "low_pleasantness", "anticipatory_anxiety", "rumination_detected"],
+  
+  "// METADATA": "================",
+  "created_at": "2026-01-28T14:30:00Z",
+  "updated_at": "2026-01-28T14:45:00Z"
+}

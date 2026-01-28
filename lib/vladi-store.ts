@@ -12,9 +12,12 @@ export interface MoodEntry {
   valence: 1 | -1 | 0
   energy: number
   pleasantness: number
+  intensity: number // Alias para compatibilidad
   intensity_before: number
   intensity_after: number | null
   text: string
+  tags?: string[] // Para contexto
+  note?: string // Texto libre
   contextTags: string[]
   privacy: string
   context?: string
@@ -22,11 +25,32 @@ export interface MoodEntry {
     type: string
     completed: boolean
   }
-  // Nuevos campos DEAM EQ v2
+  intervention_type?: string // Para el tipo de intervención
+  // Nuevos campos DEAM EQ v2 - Onset
   onset_bucket?: "just_now" | "10_30_min" | "30_60_min" | "1_3_hours" | "3_plus_hours"
   onset_estimated_minutes?: number
+  // Physical state
   physical_state?: "low" | "mid" | "high"
   physical_flags?: ("hungry" | "sick")[]
+  // Intervention tracking (spec 4.6)
+  intervention_suggested?: boolean
+  intervention_suggested_type?: string
+  intervention_done?: boolean
+  intervention_done_type?: string
+  post_check_completed?: boolean
+  arousal_self_after?: number // 1-10
+  intervention_skip_reason?: string
+  // AI features
+  ai_features?: {
+    note_summary?: string
+    trigger_categories?: string[]
+    detected_topics?: string[]
+    cognitive_patterns?: string[]
+    needs?: string[]
+    risk_level?: "none" | "low" | "medium" | "high"
+    suggested_intervention_type?: string
+    xai_reason_codes?: string[]
+  }
 }
 
 export interface ChatMessage {

@@ -1,4 +1,4 @@
-import type { EmotionEntry } from "./vladi-store"
+import type { MoodEntry as EmotionEntry } from "./vladi-store"
 
 // Definiciones científicas de las métricas DEAM EQ
 // Basado en el modelo de Mayer & Salovey de las 4 ramas de inteligencia emocional
@@ -558,43 +558,34 @@ export function calculateDEAMMetrics(
 
   // ============================================
   // 4. ADAPTABILIDAD (A) - Eficacia de las intervenciones
-  // Formula: A = 0.4 * efectividad + 0.3 * engagement + 0.3 * consistencia
-  // Donde efectividad = promedio(intensidad_antes - intensidad_despues) / 10
+  // Formula oficial v1: delta = max(0, before - after) / 9, A = mean(delta) clamp [0..1]
+  // Solo registros con intervention_done=true Y post_check (intensity_after)
   // ============================================
   const entriesWithIntervention = currentEntries.filter(
-    (e) => e.intensity_after !== undefined && e.intensity_after !== null && e.intervention_type,
+    (e) => e.intervention_done === true && 
+           e.intensity_after !== undefined && 
+           e.intensity_after !== null
   )
   
   let A = 0.5 // Valor por defecto si no hay intervenciones
-  let avgEffectiveness = 0
-  let engagementRate = 0
   
   if (entriesWithIntervention.length > 0) {
-    // Efectividad: reducción promedio de intensidad (normalizada 0-1)
+    // Formula oficial: delta = max(0, before - after) / 9
     const deltas = entriesWithIntervention.map((e) => {
-      const before = e.intensity_before || 5
-      const after = e.intensity_after || before
-      return Math.max(0, before - after) / 10 // Normalizar a 0-1
+      const before = e.intensity_before || e.intensity || 5
+      const after = e.intensity_after!
+      return Math.max(0, before - after) / 9 // Escala 1-10, max delta = 9
     })
-    avgEffectiveness = deltas.reduce((sum, d) => sum + d, 0) / deltas.length
-    
-    // Engagement: proporción de registros negativos donde se usó intervención
-    const negativeEntries = currentEntries.filter((e) => 
-      (e.quadrant === "red" || e.quadrant === "blue") && (e.intensity_before || 0) >= 6
-    )
-    engagementRate = negativeEntries.length > 0 
-      ? entriesWithIntervention.length / negativeEntries.length 
-      : 0.5
-    
-    // Fórmula ponderada de adaptabilidad
-    A = Math.min(1, 0.5 * avgEffectiveness * 2 + 0.5 * engagementRate)
+    // A = mean(delta) clamp [0..1]
+    A = Math.min(1, Math.max(0, deltas.reduce((sum, d) => sum + d, 0) / deltas.length))
   }
 
   // ============================================
   // 5. INERCIA EMOCIONAL (Ie) - Persistencia de estados negativos
-  // Formula: Ie = tiempo_promedio_recuperacion / tiempo_maximo_esperado
-  // Donde tiempo_maximo_esperado = 24 horas
-  // Un Ie bajo (cercano a 0) indica buena recuperación
+  // Formula oficial v1: Ie_score = min(1, Ie_hours / 24)
+  // Donde Ie_hours = tiempo promedio de recuperación tras picos
+  // Un Ie bajo (cercano a 0) = buena recuperación (resiliencia alta)
+  // Resilience = 1 - Ie_score (para radar, más alto = mejor)
   // ============================================
   const negativeQuadrants = ["red", "blue"]
   const negativeEntries = currentEntries.filter((e) => negativeQuadrants.includes(e.quadrant))

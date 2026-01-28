@@ -64,6 +64,144 @@ export const DEFAULT_ADHERENCE_CONFIG = {
   recoveryMargin: 2,          // Margen de intensidad para considerar recuperación
 }
 
+// ============================================
+// DATA GATING THRESHOLDS - Umbrales mínimos para mostrar métricas
+// ============================================
+export const DATA_GATING_THRESHOLDS = {
+  // Umbrales para mostrar cada métrica (número mínimo de registros)
+  granularity: {
+    min: 5,           // Mínimo 5 registros para calcular G
+    optimal: 15,      // Óptimo para cálculo fiable
+    message: "Necesitas al menos 5 registros para calcular tu granularidad emocional"
+  },
+  perception: {
+    min: 3,           // Mínimo 3 registros para calcular P
+    optimal: 7,       // Óptimo para cálculo fiable (1 semana)
+    message: "Necesitas al menos 3 registros para calcular tu percepción"
+  },
+  consciousness: {
+    min: 3,           // Mínimo 3 registros con contexto
+    optimal: 10,      // Óptimo para cálculo fiable
+    message: "Necesitas al menos 3 registros con contexto para calcular tu conciencia"
+  },
+  adaptability: {
+    min: 2,           // Mínimo 2 intervenciones completadas
+    optimal: 5,       // Óptimo para cálculo fiable
+    message: "Necesitas completar al menos 2 intervenciones para calcular tu adaptabilidad"
+  },
+  inertia: {
+    min: 3,           // Mínimo 3 picos negativos detectados
+    optimal: 5,       // Óptimo para cálculo fiable
+    message: "Necesitas al menos 3 episodios de recuperación para calcular tu inercia"
+  },
+  deamEQ: {
+    min: 7,           // Mínimo 7 registros para mostrar EQ compuesto
+    optimal: 14,      // Óptimo (2 semanas de datos)
+    message: "Necesitas al menos 7 registros para calcular tu DEAM EQ"
+  }
+}
+
+// Estados de calibración para cada métrica
+export type CalibrationState = 
+  | "insufficient"   // No hay datos suficientes (< min)
+  | "calibrating"    // Datos en proceso de calibración (>= min, < optimal)
+  | "stable"         // Datos suficientes para cálculo fiable (>= optimal)
+
+export interface MetricCalibration {
+  state: CalibrationState
+  current: number      // Registros/datos actuales
+  min: number          // Umbral mínimo
+  optimal: number      // Umbral óptimo
+  progress: number     // 0-100% hacia optimal
+  message: string      // Mensaje para el usuario
+}
+
+export interface DEAMCalibrationStatus {
+  granularity: MetricCalibration
+  perception: MetricCalibration
+  consciousness: MetricCalibration
+  adaptability: MetricCalibration
+  inertia: MetricCalibration
+  deamEQ: MetricCalibration
+  overallState: CalibrationState
+  overallProgress: number
+}
+
+// Calcula el estado de calibración para cada métrica
+export function calculateCalibrationStatus(
+  entries: EmotionEntry[],
+  periodDays: number
+): DEAMCalibrationStatus {
+  const totalEntries = entries.length
+  const entriesWithContext = entries.filter(
+    (e) => (e.tags && e.tags.length > 0) || (e.notes && e.notes.trim().length > 0)
+  ).length
+  const entriesWithIntervention = entries.filter(
+    (e) => e.intensity_after !== undefined && e.intervention_type
+  ).length
+  const negativePeaks = entries.filter(
+    (e) => (e.quadrant === "red" || e.quadrant === "blue") && (e.intensity || 5) >= 7
+  ).length
+
+  const getCalibration = (
+    current: number,
+    config: { min: number; optimal: number; message: string }
+  ): MetricCalibration => {
+    let state: CalibrationState
+    if (current < config.min) {
+      state = "insufficient"
+    } else if (current < config.optimal) {
+      state = "calibrating"
+    } else {
+      state = "stable"
+    }
+
+    return {
+      state,
+      current,
+      min: config.min,
+      optimal: config.optimal,
+      progress: Math.min(100, Math.round((current / config.optimal) * 100)),
+      message: state === "insufficient" ? config.message : 
+               state === "calibrating" ? `Calibrando... (${current}/${config.optimal})` :
+               "Datos suficientes"
+    }
+  }
+
+  const granularity = getCalibration(totalEntries, DATA_GATING_THRESHOLDS.granularity)
+  const perception = getCalibration(totalEntries, DATA_GATING_THRESHOLDS.perception)
+  const consciousness = getCalibration(entriesWithContext, DATA_GATING_THRESHOLDS.consciousness)
+  const adaptability = getCalibration(entriesWithIntervention, DATA_GATING_THRESHOLDS.adaptability)
+  const inertia = getCalibration(negativePeaks, DATA_GATING_THRESHOLDS.inertia)
+  const deamEQ = getCalibration(totalEntries, DATA_GATING_THRESHOLDS.deamEQ)
+
+  // Estado general: el más restrictivo
+  const states = [granularity, perception, consciousness, adaptability, inertia, deamEQ]
+  let overallState: CalibrationState = "stable"
+  if (states.some(s => s.state === "insufficient")) {
+    overallState = "insufficient"
+  } else if (states.some(s => s.state === "calibrating")) {
+    overallState = "calibrating"
+  }
+
+  // Progreso general: promedio ponderado
+  const overallProgress = Math.round(
+    (granularity.progress + perception.progress + consciousness.progress + 
+     adaptability.progress + inertia.progress + deamEQ.progress) / 6
+  )
+
+  return {
+    granularity,
+    perception,
+    consciousness,
+    adaptability,
+    inertia,
+    deamEQ,
+    overallState,
+    overallProgress
+  }
+}
+
 export interface InertiaData {
   avgRecoveryTimeHours: number // Tiempo medio de recuperación en horas
   avgRecoveryTimeFormatted: string // Formato legible "2,3 h" o "45 min"
@@ -104,6 +242,7 @@ export interface DEAMMetrics {
   }[]
   adherence: number // Porcentaje de adherencia
   uniqueEmotions: string[]
+  calibration: DEAMCalibrationStatus // Estado de calibración de cada métrica
 }
 
 function calculateInertiaData(entries: EmotionEntry[], previousEntries: EmotionEntry[] | null = null): InertiaData {
@@ -242,6 +381,9 @@ export function calculateDEAMMetrics(
     ...userConfig,
   }
 
+  // Calcular estado de calibración primero
+  const calibration = calculateCalibrationStatus(currentEntries || [], periodDays)
+
   const defaultMetrics: DEAMMetrics = {
     G: 0,
     P: 0,
@@ -267,6 +409,7 @@ export function calculateDEAMMetrics(
     topTriggers: [],
     adherence: 0,
     uniqueEmotions: [],
+    calibration,
   }
 
   if (!currentEntries || currentEntries.length === 0) {
@@ -504,6 +647,7 @@ export function calculateDEAMMetrics(
     topTriggers,
     adherence,
     uniqueEmotions,
+    calibration,
   }
 }
 

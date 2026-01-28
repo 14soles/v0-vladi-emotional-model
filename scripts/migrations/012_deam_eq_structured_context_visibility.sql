@@ -191,9 +191,9 @@ BEGIN
     NEW.quadrant_inconsistent := FALSE;
   END IF;
   
-  -- Copy note to note_raw if note_raw is empty
-  IF NEW.note_raw IS NULL AND NEW.note IS NOT NULL THEN
-    NEW.note_raw := NEW.note;
+  -- Copy notes to note_raw if note_raw is empty (notes is the actual column name)
+  IF NEW.note_raw IS NULL AND NEW.notes IS NOT NULL THEN
+    NEW.note_raw := NEW.notes;
   END IF;
   
   RETURN NEW;
@@ -220,20 +220,18 @@ CREATE INDEX IF NOT EXISTS idx_emotion_entries_social_tags
 -- 9. Backfill existing data
 -- ============================================
 
--- Copy existing 'note' or 'description' to note_raw
+-- Copy existing 'notes' to note_raw
 UPDATE public.emotion_entries
-SET note_raw = COALESCE(note, description)
-WHERE note_raw IS NULL AND (note IS NOT NULL OR description IS NOT NULL);
+SET note_raw = notes
+WHERE note_raw IS NULL AND notes IS NOT NULL;
 
 -- Set default visibility to private for existing entries
 UPDATE public.emotion_entries
 SET visibility_scope = 'private'
 WHERE visibility_scope IS NULL;
 
--- Copy existing tags to activity_tags (simple migration)
-UPDATE public.emotion_entries
-SET activity_tags = tags
-WHERE activity_tags = '{}' AND tags IS NOT NULL AND array_length(tags, 1) > 0;
+-- Note: company_tags and activity_tags exist but they use different structure
+-- We'll leave activity_tags empty for new entries; existing data uses different columns
 
 -- Calculate quadrant for existing entries
 UPDATE public.emotion_entries

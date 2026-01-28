@@ -4,7 +4,9 @@ import { useState, useMemo } from "react"
 import { ChevronDown, Info } from "lucide-react"
 import { useVladiStore } from "@/lib/vladi-store"
 import { calculateEmotionalState } from "@/lib/emotional-state-calculator"
+import { calculateDEAMMetrics, DATA_GATING_THRESHOLDS } from "@/lib/deam-engine"
 import { CommonHeader } from "./common-header"
+import { CalibrationOverlay, CalibrationIndicator } from "./calibration-indicator"
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts"
 
 type TimeRange = "7D" | "14D" | "30D"
@@ -50,6 +52,26 @@ export function IEQView({
   // Calcular estado emocional reciente
   const emotionalState = useMemo(() => {
     return calculateEmotionalState(entries, timeRange)
+  }, [entries, timeRange])
+
+  // Calcular métricas DEAM EQ
+  const deamMetrics = useMemo(() => {
+    const rangeDays = timeRange === "7D" ? 7 : timeRange === "14D" ? 14 : 30
+    const now = new Date()
+    const rangeMs = rangeDays * 24 * 60 * 60 * 1000
+    const prevRangeMs = rangeMs * 2
+
+    const currentEntries = entries.filter(
+      (e) => now.getTime() - new Date(e.timestamp).getTime() <= rangeMs
+    )
+    const previousEntries = entries.filter(
+      (e) => {
+        const age = now.getTime() - new Date(e.timestamp).getTime()
+        return age > rangeMs && age <= prevRangeMs
+      }
+    )
+
+    return calculateDEAMMetrics(currentEntries, previousEntries, rangeDays)
   }, [entries, timeRange])
 
   // Datos para el gráfico de intensidad y bienestar
@@ -193,49 +215,65 @@ export function IEQView({
 
         {/* Bloque 2: DEAM IEQ Score */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="bg-white rounded-3xl p-5 shadow-sm">
-            <div className="flex items-start justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-900">DEAM IEQ</h3>
-              <button
-                onClick={() => setShowInfoModal("deam_ieq")}
-                className="w-5 h-5 rounded-full border border-gray-300 flex items-center justify-center text-gray-400 hover:text-gray-600"
-              >
-                <Info className="w-3 h-3" />
-              </button>
+          <CalibrationOverlay calibration={deamMetrics.calibration.deamEQ}>
+            <div className="bg-white rounded-3xl p-5 shadow-sm">
+              <div className="flex items-start justify-between mb-3">
+                <h3 className="text-sm font-semibold text-gray-900">DEAM IEQ</h3>
+                <button
+                  onClick={() => setShowInfoModal("deam_ieq")}
+                  className="w-5 h-5 rounded-full border border-gray-300 flex items-center justify-center text-gray-400 hover:text-gray-600"
+                >
+                  <Info className="w-3 h-3" />
+                </button>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-4xl font-bold text-gray-900">{deamMetrics.deamEQ}</span>
+                <span className="text-gray-500 text-lg">/100</span>
+              </div>
+              {deamMetrics.deamTrend !== 0 && (
+                <div className={`mt-3 inline-flex items-center gap-1 px-2 py-1 rounded-full ${
+                  deamMetrics.deamTrend > 0 ? "bg-green-100" : "bg-red-100"
+                }`}>
+                  <svg className={`w-3 h-3 ${deamMetrics.deamTrend > 0 ? "text-green-600" : "text-red-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={deamMetrics.deamTrend > 0 ? "M13 7l5 5m0 0l-5 5m5-5H6" : "M11 17l-5-5m0 0l5-5m-5 5h12"} />
+                  </svg>
+                  <span className={`text-xs font-medium ${deamMetrics.deamTrend > 0 ? "text-green-700" : "text-red-700"}`}>
+                    {deamMetrics.deamTrend > 0 ? "+" : ""}{deamMetrics.deamTrend} vs antes
+                  </span>
+                </div>
+              )}
             </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold text-gray-900">79</span>
-              <span className="text-gray-500 text-lg">/100</span>
-            </div>
-            <div className="mt-3 inline-flex items-center gap-1 px-2 py-1 bg-green-100 rounded-full">
-              <svg className="w-3 h-3 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-              </svg>
-              <span className="text-xs font-medium text-green-700">+19% vs antes</span>
-            </div>
-          </div>
+          </CalibrationOverlay>
 
-          <div className="bg-white rounded-3xl p-5 shadow-sm">
-            <div className="flex items-start justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-900">Inercia</h3>
-              <button
-                onClick={() => setShowInfoModal("inertia")}
-                className="w-5 h-5 rounded-full border border-gray-300 flex items-center justify-center text-gray-400 hover:text-gray-600"
-              >
-                <Info className="w-3 h-3" />
-              </button>
+          <CalibrationOverlay calibration={deamMetrics.calibration.inertia}>
+            <div className="bg-white rounded-3xl p-5 shadow-sm">
+              <div className="flex items-start justify-between mb-3">
+                <h3 className="text-sm font-semibold text-gray-900">Inercia</h3>
+                <button
+                  onClick={() => setShowInfoModal("inertia")}
+                  className="w-5 h-5 rounded-full border border-gray-300 flex items-center justify-center text-gray-400 hover:text-gray-600"
+                >
+                  <Info className="w-3 h-3" />
+                </button>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-4xl font-bold text-gray-900">{deamMetrics.inertiaData.avgRecoveryTimeFormatted}</span>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">Recup. Promedio</p>
+              {deamMetrics.inertiaData.trendHoursDiff !== 0 && (
+                <div className={`mt-3 inline-flex items-center gap-1 px-2 py-1 rounded-full ${
+                  deamMetrics.inertiaData.trendHoursDiff < 0 ? "bg-green-100" : "bg-red-100"
+                }`}>
+                  <svg className={`w-3 h-3 ${deamMetrics.inertiaData.trendHoursDiff < 0 ? "text-green-600" : "text-red-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={deamMetrics.inertiaData.trendHoursDiff < 0 ? "M19 14l-7 7m0 0l-7-7m7 7V3" : "M5 10l7-7m0 0l7 7m-7-7v18"} />
+                  </svg>
+                  <span className={`text-xs font-medium ${deamMetrics.inertiaData.trendHoursDiff < 0 ? "text-green-700" : "text-red-700"}`}>
+                    {deamMetrics.inertiaData.trendHoursDiff < 0 ? "" : "+"}{deamMetrics.inertiaData.trendHoursDiff.toFixed(1)}h vs antes
+                  </span>
+                </div>
+              )}
             </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold text-gray-900">3.5h</span>
-            </div>
-            <p className="text-xs text-gray-500 mt-1">Recup. Promedio</p>
-            <div className="mt-3 inline-flex items-center gap-1 px-2 py-1 bg-green-100 rounded-full">
-              <svg className="w-3 h-3 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-              </svg>
-              <span className="text-xs font-medium text-green-700">-1.5h vs antes</span>
-            </div>
-          </div>
+          </CalibrationOverlay>
         </div>
 
         {/* Bloque 3: Intensidad y bienestar */}

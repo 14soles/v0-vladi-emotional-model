@@ -111,18 +111,42 @@ CREATE TRIGGER on_friend_request_accepted
 -- Solution B: Modify the trigger to use ON CONFLICT
 -- ============================================
 
--- Add unique constraint on social_notifications for comment notifications
--- This prevents duplicate notifications for the same comment
-ALTER TABLE public.social_notifications 
-  DROP CONSTRAINT IF EXISTS social_notifications_comment_unique;
+-- FIRST: Clean up any existing duplicate notifications BEFORE creating indexes
+WITH duplicates AS (
+  SELECT id, ROW_NUMBER() OVER (
+    PARTITION BY entry_id, from_user_id, notification_type, COALESCE(comment_id, '00000000-0000-0000-0000-000000000000'::uuid)
+    ORDER BY created_at DESC
+  ) as rn
+  FROM public.social_notifications
+  WHERE notification_type IN ('comment', 'comment_reply')
+)
+DELETE FROM public.social_notifications 
+WHERE id IN (SELECT id FROM duplicates WHERE rn > 1);
+
+-- Clean up duplicate view notifications
+WITH view_duplicates AS (
+  SELECT id, ROW_NUMBER() OVER (
+    PARTITION BY entry_id, from_user_id, notification_type
+    ORDER BY created_at DESC
+  ) as rn
+  FROM public.social_notifications
+  WHERE notification_type = 'view'
+)
+DELETE FROM public.social_notifications 
+WHERE id IN (SELECT id FROM view_duplicates WHERE rn > 1);
+
+-- NOW create unique indexes after duplicates are removed
+-- Drop existing indexes first
+DROP INDEX IF EXISTS idx_social_notifications_comment_unique;
+DROP INDEX IF EXISTS idx_social_notifications_view_unique;
 
 -- Use a partial unique index instead of constraint for flexibility
-CREATE UNIQUE INDEX IF NOT EXISTS idx_social_notifications_comment_unique 
+CREATE UNIQUE INDEX idx_social_notifications_comment_unique 
   ON public.social_notifications (entry_id, from_user_id, notification_type, COALESCE(comment_id, '00000000-0000-0000-0000-000000000000'::uuid))
   WHERE notification_type IN ('comment', 'comment_reply');
 
 -- Also add unique index for view notifications (one view notification per user per entry)
-CREATE UNIQUE INDEX IF NOT EXISTS idx_social_notifications_view_unique 
+CREATE UNIQUE INDEX idx_social_notifications_view_unique 
   ON public.social_notifications (entry_id, from_user_id, notification_type)
   WHERE notification_type = 'view';
 
@@ -233,27 +257,3 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
--- Clean up any existing duplicate notifications
-WITH duplicates AS (
-  SELECT id, ROW_NUMBER() OVER (
-    PARTITION BY entry_id, from_user_id, notification_type, comment_id
-    ORDER BY created_at DESC
-  ) as rn
-  FROM public.social_notifications
-  WHERE notification_type IN ('comment', 'comment_reply')
-)
-DELETE FROM public.social_notifications 
-WHERE id IN (SELECT id FROM duplicates WHERE rn > 1);
-
--- Clean up duplicate view notifications
-WITH view_duplicates AS (
-  SELECT id, ROW_NUMBER() OVER (
-    PARTITION BY entry_id, from_user_id, notification_type
-    ORDER BY created_at DESC
-  ) as rn
-  FROM public.social_notifications
-  WHERE notification_type = 'view'
-)
-DELETE FROM public.social_notifications 
-WHERE id IN (SELECT id FROM view_duplicates WHERE rn > 1);

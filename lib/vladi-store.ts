@@ -22,6 +22,11 @@ export interface MoodEntry {
     type: string
     completed: boolean
   }
+  // Nuevos campos DEAM EQ v2
+  onset_bucket?: "just_now" | "10_30_min" | "30_60_min" | "1_3_hours" | "3_plus_hours"
+  onset_estimated_minutes?: number
+  physical_state?: "low" | "mid" | "high"
+  physical_flags?: ("hungry" | "sick")[]
 }
 
 export interface ChatMessage {

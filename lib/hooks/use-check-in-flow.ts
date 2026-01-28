@@ -122,6 +122,11 @@ export function useCheckInFlow(userId?: string) {
         intensityBefore: state.intensity,
         contextCategory: state.context || "otro",
         contextText: state.contextText || undefined,
+        // Nuevos campos DEAM EQ v2
+        onsetBucket: state.onsetBucket || undefined,
+        onsetEstimatedMinutes: state.onsetBucket ? ONSET_TO_MINUTES[state.onsetBucket] : undefined,
+        physicalState: state.physicalState || undefined,
+        physicalFlags: state.physicalFlags.length > 0 ? state.physicalFlags : undefined,
       })
       setStep("complete")
 
@@ -181,6 +186,11 @@ export function useCheckInFlow(userId?: string) {
         intensity: state.intensity,
         context: state.context || undefined,
         contextText: state.contextText || undefined,
+        // Nuevos campos DEAM EQ v2
+        onsetBucket: state.onsetBucket || undefined,
+        onsetEstimatedMinutes: state.onsetBucket ? ONSET_TO_MINUTES[state.onsetBucket] : undefined,
+        physicalState: state.physicalState || undefined,
+        physicalFlags: state.physicalFlags.length > 0 ? state.physicalFlags : undefined,
       })
     } catch (error) {
       throw error

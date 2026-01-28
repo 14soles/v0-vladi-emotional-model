@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { EmotionPicker } from "./emotion-picker"
 import { IntensitySlider } from "./intensity-slider"
+import { OnsetPicker } from "./onset-picker"
 import { ContextPicker } from "./context-picker"
 import { InterventionFlow } from "./interventions/intervention-flow"
 import { useCheckInFlow, type CheckInStep } from "@/lib/hooks"
@@ -24,6 +25,8 @@ export function CheckInFlow({ onComplete, onCancel }: CheckInFlowProps) {
     canProceed,
     setEmotion,
     setIntensity,
+    setOnsetBucket,
+    setPhysicalState,
     setContext,
     setContextText,
     setInterventionDelta,
@@ -35,6 +38,7 @@ export function CheckInFlow({ onComplete, onCancel }: CheckInFlowProps) {
   const stepTitles: Record<CheckInStep, string> = {
     emotion: "¿Cómo te sientes?",
     intensity: "¿Qué tan intenso es?",
+    onset: "Un poco más de contexto",
     context: "¿Qué lo provocó?",
     summary: "Tu check-in",
     intervention: "Herramientas",
@@ -102,6 +106,16 @@ export function CheckInFlow({ onComplete, onCancel }: CheckInFlowProps) {
                 </div>
                 <IntensitySlider value={state.intensity} onChange={setIntensity} />
               </div>
+            )}
+
+            {step === "onset" && (
+              <OnsetPicker
+                selectedOnset={state.onsetBucket}
+                selectedPhysical={state.physicalState}
+                onOnsetSelect={setOnsetBucket}
+                onPhysicalSelect={setPhysicalState}
+                isNegativeEmotion={state.selectedEmotion?.valence === "negative"}
+              />
             )}
 
             {step === "context" && (

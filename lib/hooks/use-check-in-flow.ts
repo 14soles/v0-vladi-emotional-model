@@ -6,11 +6,19 @@ import { useVladiStore } from "@/lib/vladi-store"
 import { useVladiCheckIn } from "./use-vladi-check-in"
 import type { Emotion, ContextCategory } from "@/lib/vladi-types"
 
-export type CheckInStep = "emotion" | "intensity" | "context" | "summary" | "intervention" | "complete"
+export type CheckInStep = "emotion" | "intensity" | "onset" | "context" | "summary" | "intervention" | "complete"
+
+// Buckets para preguntar "¿Desde cuándo te sientes así?"
+export type OnsetBucket = "just_now" | "10_30_min" | "30_60_min" | "1_3_hours" | "3_plus_hours" | "unknown"
+
+// Estado físico para separar fatiga de emociones
+export type PhysicalState = "rested" | "tired" | "sick" | "hungry" | "none"
 
 export interface CheckInState {
   selectedEmotion: Emotion | null
   intensity: number
+  onsetBucket: OnsetBucket | null
+  physicalState: PhysicalState | null
   context: ContextCategory | null
   contextText: string
   interventionDelta: number | null
@@ -21,6 +29,8 @@ export function useCheckInFlow(userId?: string) {
   const [state, setState] = useState<CheckInState>({
     selectedEmotion: null,
     intensity: 5,
+    onsetBucket: null,
+    physicalState: null,
     context: null,
     contextText: "",
     interventionDelta: null,
@@ -29,7 +39,8 @@ export function useCheckInFlow(userId?: string) {
   const { startCheckIn, updateCheckIn } = useVladiStore()
   const { saveCheckIn } = useVladiCheckIn(userId)
 
-  const steps: CheckInStep[] = ["emotion", "intensity", "context", "summary"]
+  // Nuevo flujo: emotion -> intensity -> onset (solo si negativo/alto) -> context -> summary
+  const steps: CheckInStep[] = ["emotion", "intensity", "onset", "context", "summary"]
   const currentStepIndex = steps.indexOf(step)
 
   const canProceed = useCallback(() => {
@@ -38,6 +49,9 @@ export function useCheckInFlow(userId?: string) {
         return state.selectedEmotion !== null
       case "intensity":
         return state.intensity >= 1 && state.intensity <= 10
+      case "onset":
+        // Onset es opcional pero recomendado
+        return true
       case "context":
         return true
       case "summary":
@@ -61,6 +75,14 @@ export function useCheckInFlow(userId?: string) {
 
   const setContextText = useCallback((text: string) => {
     setState((prev) => ({ ...prev, contextText: text }))
+  }, [])
+
+  const setOnsetBucket = useCallback((bucket: OnsetBucket | null) => {
+    setState((prev) => ({ ...prev, onsetBucket: bucket }))
+  }, [])
+
+  const setPhysicalState = useCallback((physState: PhysicalState | null) => {
+    setState((prev) => ({ ...prev, physicalState: physState }))
   }, [])
 
   const setInterventionDelta = useCallback((delta: number | null) => {
@@ -108,6 +130,8 @@ export function useCheckInFlow(userId?: string) {
     setState({
       selectedEmotion: null,
       intensity: 5,
+      onsetBucket: null,
+      physicalState: null,
       context: null,
       contextText: "",
       interventionDelta: null,
@@ -146,6 +170,8 @@ export function useCheckInFlow(userId?: string) {
     canProceed,
     setEmotion,
     setIntensity,
+    setOnsetBucket,
+    setPhysicalState,
     setContext,
     setContextText,
     setInterventionDelta,

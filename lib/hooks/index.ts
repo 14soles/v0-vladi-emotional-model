@@ -10,7 +10,7 @@ export { useVladiCheckIn } from "./use-vladi-check-in"
 
 export type { TimePeriod } from "./use-period-selector"
 export type { EmotionPosition, EmotionData } from "./use-emotion-selector"
-export type { CheckInStep, CheckInState } from "./use-check-in-flow"
+export type { CheckInStep, CheckInState, OnsetBucket, PhysicalState } from "./use-check-in-flow"
 export type { ScreenSize } from "./use-screen-size"
 export type { QueryState } from "./use-supabase-query"
 export type { CheckInData } from "./use-vladi-check-in"

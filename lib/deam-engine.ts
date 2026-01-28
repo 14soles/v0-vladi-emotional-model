@@ -66,38 +66,39 @@ export const DEFAULT_ADHERENCE_CONFIG = {
 
 // ============================================
 // DATA GATING THRESHOLDS - Umbrales mínimos para mostrar métricas
+// Basado en especificaciones del documento DEAM EQ v2
 // ============================================
 export const DATA_GATING_THRESHOLDS = {
   // Umbrales para mostrar cada métrica (número mínimo de registros)
   granularity: {
-    min: 5,           // Mínimo 5 registros para calcular G
-    optimal: 15,      // Óptimo para cálculo fiable
-    message: "Necesitas al menos 5 registros para calcular tu granularidad emocional"
+    min: 7,           // Mínimo 7 registros para calcular G (1 semana)
+    optimal: 21,      // Óptimo para cálculo fiable (3 semanas)
+    message: "Necesitas al menos 7 registros para calcular tu granularidad emocional"
   },
   perception: {
-    min: 3,           // Mínimo 3 registros para calcular P
-    optimal: 7,       // Óptimo para cálculo fiable (1 semana)
-    message: "Necesitas al menos 3 registros para calcular tu percepción"
+    min: 7,           // Mínimo 7 días de adherencia para calcular P
+    optimal: 14,      // Óptimo para cálculo fiable (2 semanas)
+    message: "Necesitas al menos 7 días de uso para calcular tu percepción"
   },
   consciousness: {
-    min: 3,           // Mínimo 3 registros con contexto
-    optimal: 10,      // Óptimo para cálculo fiable
-    message: "Necesitas al menos 3 registros con contexto para calcular tu conciencia"
+    min: 5,           // Mínimo 5 registros con contexto
+    optimal: 15,      // Óptimo para cálculo fiable
+    message: "Necesitas al menos 5 registros con contexto para calcular tu conciencia"
   },
   adaptability: {
-    min: 2,           // Mínimo 2 intervenciones completadas
-    optimal: 5,       // Óptimo para cálculo fiable
-    message: "Necesitas completar al menos 2 intervenciones para calcular tu adaptabilidad"
+    min: 3,           // Mínimo 3 intervenciones completadas
+    optimal: 7,       // Óptimo para cálculo fiable
+    message: "Necesitas completar al menos 3 intervenciones para calcular tu adaptabilidad"
   },
   inertia: {
-    min: 3,           // Mínimo 3 picos negativos detectados
+    min: 2,           // Mínimo 2 episodios con onset_bucket válido
     optimal: 5,       // Óptimo para cálculo fiable
-    message: "Necesitas al menos 3 episodios de recuperación para calcular tu inercia"
+    message: "Necesitas al menos 2 episodios de recuperación para calcular tu inercia"
   },
   deamEQ: {
-    min: 7,           // Mínimo 7 registros para mostrar EQ compuesto
-    optimal: 14,      // Óptimo (2 semanas de datos)
-    message: "Necesitas al menos 7 registros para calcular tu DEAM EQ"
+    min: 10,          // Mínimo 10 registros para mostrar EQ compuesto
+    optimal: 21,      // Óptimo (3 semanas de datos)
+    message: "Necesitas al menos 10 registros para calcular tu DEAM EQ"
   }
 }
 
@@ -128,18 +129,33 @@ export interface DEAMCalibrationStatus {
 }
 
 // Calcula el estado de calibración para cada métrica
+// Usa los nuevos campos: onset_bucket, intervention_done, physical_state
 export function calculateCalibrationStatus(
   entries: EmotionEntry[],
   periodDays: number
 ): DEAMCalibrationStatus {
   const totalEntries = entries.length
+  
+  // Registros con contexto (tags, notas, o triggers estructurados)
   const entriesWithContext = entries.filter(
-    (e) => (e.tags && e.tags.length > 0) || (e.notes && e.notes.trim().length > 0)
+    (e) => (e.tags && e.tags.length > 0) || 
+           (e.notes && e.notes.trim().length > 0) ||
+           (e.activity_tags && e.activity_tags.length > 0) ||
+           (e.social_tags && e.social_tags.length > 0)
   ).length
+  
+  // Intervenciones completadas (usando intervention_done si existe, fallback a intensity_after)
   const entriesWithIntervention = entries.filter(
-    (e) => e.intensity_after !== undefined && e.intervention_type
+    (e) => e.intervention_done === true || 
+           (e.intensity_after !== undefined && e.intervention_type)
   ).length
-  const negativePeaks = entries.filter(
+  
+  // Episodios con onset_bucket válido para calcular inercia
+  // Si no hay onset_bucket, fallback a picos negativos
+  const entriesWithOnset = entries.filter(
+    (e) => e.onset_bucket !== undefined && e.onset_bucket !== null
+  ).length
+  const negativePeaks = entriesWithOnset > 0 ? entriesWithOnset : entries.filter(
     (e) => (e.quadrant === "red" || e.quadrant === "blue") && (e.intensity || 5) >= 7
   ).length
 
@@ -245,6 +261,16 @@ export interface DEAMMetrics {
   calibration: DEAMCalibrationStatus // Estado de calibración de cada métrica
 }
 
+// Mapeo de onset_bucket a minutos estimados (punto medio del rango)
+const ONSET_BUCKET_MINUTES: Record<string, number> = {
+  "just_now": 5,        // 0-10 min
+  "10_30_min": 20,      // 10-30 min
+  "30_60_min": 45,      // 30-60 min
+  "1_3_hours": 120,     // 1-3 horas
+  "3_plus_hours": 240,  // 3+ horas (estimado 4h)
+  "unknown": 60,        // Desconocido (1h por defecto)
+}
+
 function calculateInertiaData(entries: EmotionEntry[], previousEntries: EmotionEntry[] | null = null): InertiaData {
   const defaultData: InertiaData = {
     avgRecoveryTimeHours: 0,
@@ -267,19 +293,30 @@ function calculateInertiaData(entries: EmotionEntry[], previousEntries: EmotionE
   // 1. Calcular línea base emocional (promedio de intensidad de los últimos 30 registros)
   const recentForBaseline = sorted.slice(-30)
   const baselineIntensity =
-    recentForBaseline.reduce((sum, e) => sum + (e.intensity_before || 5), 0) / recentForBaseline.length
+    recentForBaseline.reduce((sum, e) => sum + (e.intensity_before || e.intensity || 5), 0) / recentForBaseline.length
 
-  // 2. Identificar picos emocionales (intensidad >= 7 en cuadrantes negativos)
+  // 2. Identificar episodios negativos
+  // NUEVO: Usar onset_bucket si está disponible para calcular tiempo real de emoción
   const UMBRAL_PICO = 7
   const negativeQuadrants = ["red", "blue"]
-  const peaks: { entry: EmotionEntry; index: number; timestamp: Date }[] = []
+  const peaks: { entry: EmotionEntry; index: number; timestamp: Date; onsetMinutes: number }[] = []
 
   sorted.forEach((entry, index) => {
-    if (negativeQuadrants.includes(entry.quadrant) && (entry.intensity_before || 5) >= UMBRAL_PICO) {
+    const intensity = entry.intensity_before || entry.intensity || 5
+    if (negativeQuadrants.includes(entry.quadrant) && intensity >= UMBRAL_PICO) {
+      // Usar onset_bucket o onset_estimated_minutes si están disponibles
+      let onsetMinutes = 0
+      if (entry.onset_estimated_minutes !== undefined && entry.onset_estimated_minutes !== null) {
+        onsetMinutes = entry.onset_estimated_minutes
+      } else if (entry.onset_bucket && ONSET_BUCKET_MINUTES[entry.onset_bucket]) {
+        onsetMinutes = ONSET_BUCKET_MINUTES[entry.onset_bucket]
+      }
+
       peaks.push({
         entry,
         index,
         timestamp: new Date(entry.timestamp),
+        onsetMinutes,
       })
     }
   })
@@ -302,20 +339,27 @@ function calculateInertiaData(entries: EmotionEntry[], previousEntries: EmotionE
   peaks.forEach((peak) => {
     // Buscar el siguiente check-in donde la intensidad esté cerca de la línea base
     let recovered = false
+    
+    // NUEVO: Si tenemos onset_bucket, añadir ese tiempo al cálculo
+    // El tiempo total de inercia = onset_time + tiempo_hasta_recuperación
+    const onsetHours = peak.onsetMinutes / 60
+    
     for (let i = peak.index + 1; i < sorted.length; i++) {
       const nextEntry = sorted[i]
       const timeDiffHours = (new Date(nextEntry.timestamp).getTime() - peak.timestamp.getTime()) / (1000 * 60 * 60)
 
       // Si pasaron más de 72h sin recuperación, truncar
       if (timeDiffHours > MAX_RECOVERY_HOURS) {
-        recoveryTimes.push(MAX_RECOVERY_HOURS)
+        recoveryTimes.push(MAX_RECOVERY_HOURS + onsetHours)
         break
       }
 
       // Condición de recuperación: intensidad cerca de línea base
-      const intensityDiff = Math.abs((nextEntry.intensity_before || 5) - baselineIntensity)
+      const nextIntensity = nextEntry.intensity_before || nextEntry.intensity || 5
+      const intensityDiff = Math.abs(nextIntensity - baselineIntensity)
       if (intensityDiff <= MARGEN_RECUPERACION) {
-        recoveryTimes.push(timeDiffHours)
+        // Tiempo total = onset + tiempo desde check-in hasta recuperación
+        recoveryTimes.push(timeDiffHours + onsetHours)
         recoveredCount++
         recovered = true
         break

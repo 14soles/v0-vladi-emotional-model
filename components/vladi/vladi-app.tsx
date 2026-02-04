@@ -17,6 +17,7 @@ import { ProfileScreen } from "./profile-screen"
 import { VladiChat } from "./vladi-chat" // Imported VladiChat component
 import { NotificationsView } from "./notifications-view" // Imported NotificationsView component
 import { GroupsPeopleScreen } from "./groups-people-screen" // Imported GroupsPeopleScreen component
+import { EmotionalRadarView } from "./emotional-radar-view" // Imported EmotionalRadarView component
 import { useVladiStore, type MoodEntry } from "@/lib/vladi-store"
 import type { QuadrantId } from "@/lib/vladi-data"
 import { supabase } from "@/lib/supabase/client"
@@ -38,7 +39,7 @@ interface VladiAppProps {
 export default function VladiApp({ userId, userProfile: initialUserProfile }: VladiAppProps) {
   const [activeTab, setActiveTab] = useState("record")
   const [currentScreen, setCurrentScreen] = useState<
-    "main" | "emotion" | "context" | "mirror" | "vladi-chat" | "notifications" | "personas"
+    "main" | "emotion" | "context" | "mirror" | "vladi-chat" | "notifications" | "personas" | "emotional-radar"
   >("main")
   const [selectedQuadrant, setSelectedQuadrant] = useState<QuadrantId>("green")
   const [emotionData, setEmotionData] = useState<EmotionData | null>(null)
@@ -381,6 +382,10 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
     setCurrentScreen("personas")
   }, [])
 
+  const handleOpenEmotionalRadar = useCallback(() => {
+    setCurrentScreen("emotional-radar")
+  }, [])
+
   const handleCloseGroupsPeople = useCallback(() => {
     setCurrentScreen("main")
   }, [])
@@ -410,6 +415,10 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
   const renderMainView = () => {
     if (currentScreen === "personas") {
       return <GroupsPeopleScreen onClose={handleCloseGroupsPeople} userId={userId} />
+    }
+
+    if (currentScreen === "emotional-radar") {
+      return <EmotionalRadarView onClose={() => setCurrentScreen("main")} userId={userId} />
     }
 
     if (currentScreen === "notifications") {
@@ -453,6 +462,7 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
             onAvatarClick={handleOpenProfile}
             onNotificationsClick={handleNotificationsClick}
             notificationCount={notificationCount}
+            onRadarClick={handleOpenEmotionalRadar}
           />
         )
       case "aprende":
@@ -485,6 +495,7 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
             onAvatarClick={handleOpenProfile}
             onNotificationsClick={handleNotificationsClick}
             notificationCount={notificationCount}
+            onRadarClick={handleOpenEmotionalRadar}
           />
         )
     }

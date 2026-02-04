@@ -15,6 +15,7 @@ interface RecordViewProps {
   onAvatarClick?: () => void
   onNotificationsClick?: () => void
   notificationCount?: number
+  onRadarClick?: () => void
 }
 
 export function RecordView({
@@ -24,6 +25,7 @@ export function RecordView({
   onAvatarClick,
   onNotificationsClick,
   notificationCount = 0,
+  onRadarClick,
 }: RecordViewProps) {
   const [currentIndex, setCurrentIndex] = useState(1)
   const [isExpanding, setIsExpanding] = useState(false)
@@ -123,7 +125,24 @@ export function RecordView({
 
       <header className="w-full max-w-md flex justify-between items-center px-6 pt-[10px] pb-2 shrink-0">
         <div className="text-3xl font-light text-gray-900">Vladi</div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {/* Radar button */}
+          <button
+            onClick={onRadarClick}
+            className="relative w-10 h-10 flex items-center justify-center text-gray-900 hover:opacity-70 active:opacity-50"
+            aria-label="Radar emocional"
+          >
+            <svg className="w-[20px] h-[20px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <circle cx="12" cy="12" r="10" />
+              <circle cx="12" cy="12" r="6" />
+              <circle cx="12" cy="12" r="2" />
+              <line x1="12" y1="2" x2="12" y2="6" />
+              <line x1="12" y1="18" x2="12" y2="22" />
+              <line x1="2" y1="12" x2="6" y2="12" />
+              <line x1="18" y1="12" x2="22" y2="12" />
+            </svg>
+          </button>
+          {/* Notifications button */}
           <button
             onClick={onNotificationsClick}
             className="relative w-10 h-10 flex items-center justify-center text-gray-900 hover:opacity-70 active:opacity-50"

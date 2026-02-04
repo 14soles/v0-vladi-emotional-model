@@ -127,37 +127,32 @@ DECLARE
   lon_delta DECIMAL := radius_km / (111.0 * COS(RADIANS(user_lat)));
 BEGIN
   RETURN QUERY
-  SELECT 
-    ep.id,
-    ep.latitude,
-    ep.longitude,
-    ep.emotion,
-    ep.quadrant,
-    ep.intensity,
-    ep.created_at,
-    -- Fórmula de Haversine simplificada para distancia
-    (6371 * ACOS(
-      LEAST(1, GREATEST(-1,
-        COS(RADIANS(user_lat)) * COS(RADIANS(ep.latitude)) * 
-        COS(RADIANS(ep.longitude) - RADIANS(user_lon)) + 
-        SIN(RADIANS(user_lat)) * SIN(RADIANS(ep.latitude))
-      ))
-    ))::DECIMAL AS distance_km
-  FROM public.emotional_pings ep
-  WHERE 
-    ep.expires_at > NOW()
-    AND ep.user_id != auth.uid() -- No mostrar los propios pings
-    AND ep.latitude BETWEEN (user_lat - lat_delta) AND (user_lat + lat_delta)
-    AND ep.longitude BETWEEN (user_lon - lon_delta) AND (user_lon + lon_delta)
-  HAVING 
-    (6371 * ACOS(
-      LEAST(1, GREATEST(-1,
-        COS(RADIANS(user_lat)) * COS(RADIANS(ep.latitude)) * 
-        COS(RADIANS(ep.longitude) - RADIANS(user_lon)) + 
-        SIN(RADIANS(user_lat)) * SIN(RADIANS(ep.latitude))
-      ))
-    )) <= radius_km
-  ORDER BY distance_km ASC;
+  SELECT * FROM (
+    SELECT 
+      ep.id,
+      ep.latitude,
+      ep.longitude,
+      ep.emotion,
+      ep.quadrant,
+      ep.intensity,
+      ep.created_at,
+      -- Fórmula de Haversine simplificada para distancia
+      (6371 * ACOS(
+        LEAST(1, GREATEST(-1,
+          COS(RADIANS(user_lat)) * COS(RADIANS(ep.latitude)) * 
+          COS(RADIANS(ep.longitude) - RADIANS(user_lon)) + 
+          SIN(RADIANS(user_lat)) * SIN(RADIANS(ep.latitude))
+        ))
+      ))::DECIMAL AS distance_km
+    FROM public.emotional_pings ep
+    WHERE 
+      ep.expires_at > NOW()
+      AND ep.user_id != auth.uid() -- No mostrar los propios pings
+      AND ep.latitude BETWEEN (user_lat - lat_delta) AND (user_lat + lat_delta)
+      AND ep.longitude BETWEEN (user_lon - lon_delta) AND (user_lon + lon_delta)
+  ) AS nearby
+  WHERE nearby.distance_km <= radius_km
+  ORDER BY nearby.distance_km ASC;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 

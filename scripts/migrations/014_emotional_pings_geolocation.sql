@@ -45,10 +45,10 @@ CREATE INDEX IF NOT EXISTS idx_emotional_pings_expires
 CREATE INDEX IF NOT EXISTS idx_emotional_pings_user 
   ON public.emotional_pings (user_id);
 
--- Índice compuesto para queries de radar (no expirados, por ubicación)
+-- Índice compuesto para queries de radar (por ubicación y expiración)
+-- No usamos partial index con NOW() porque no es inmutable
 CREATE INDEX IF NOT EXISTS idx_emotional_pings_active 
-  ON public.emotional_pings (expires_at, latitude, longitude) 
-  WHERE expires_at > NOW();
+  ON public.emotional_pings (expires_at DESC, latitude, longitude);
 
 -- ============================================
 -- Configuración de usuario para radar

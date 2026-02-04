@@ -25,6 +25,42 @@ export interface CheckInData {
   physicalFlags?: PhysicalFlag[]
 }
 
+// Helper to get current location
+async function getCurrentLocation(precision: "approximate" | "precise"): Promise<{
+  latitude: number
+  longitude: number
+  accuracy: number
+} | null> {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve(null)
+      return
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        let { latitude, longitude, accuracy } = position.coords
+        
+        // If approximate precision, round coordinates (about 1km precision)
+        if (precision === "approximate") {
+          latitude = Math.round(latitude * 100) / 100
+          longitude = Math.round(longitude * 100) / 100
+        }
+        
+        resolve({ latitude, longitude, accuracy })
+      },
+      () => {
+        resolve(null)
+      },
+      {
+        enableHighAccuracy: precision === "precise",
+        timeout: 5000,
+        maximumAge: precision === "precise" ? 0 : 60000
+      }
+    )
+  })
+}
+
 export function useVladiCheckIn(userId?: string) {
   const { addEntry } = useVladiActions()
 
@@ -62,6 +98,33 @@ export function useVladiCheckIn(userId?: string) {
           .single()
 
         if (error) throw error
+
+        // Check if user has share_location enabled and create emotional ping
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("share_location, location_precision")
+          .eq("id", userId)
+          .single()
+
+        if (profile?.share_location) {
+          const location = await getCurrentLocation(profile.location_precision || "approximate")
+          
+          if (location) {
+            // Create emotional ping for radar
+            await supabase
+              .from("emotional_pings")
+              .insert({
+                user_id: userId,
+                latitude: location.latitude,
+                longitude: location.longitude,
+                accuracy_meters: location.accuracy,
+                emotion: data.emotion.emotion,
+                quadrant: data.emotion.quadrant,
+                intensity: data.intensity,
+                emotion_entry_id: entry.id,
+              })
+          }
+        }
 
         // Update local store with new fields
         addEntry({

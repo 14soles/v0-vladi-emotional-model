@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useMemo, useCallback } from "react"
-import { ArrowLeft, Settings, MapPin, Users, AlertCircle } from "lucide-react"
+import { useState, useMemo, useCallback, useEffect } from "react"
+import { ArrowLeft, Settings, MapPin, Users, AlertCircle, RefreshCw } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 import { Slider } from "@/components/ui/slider"
 import { Card } from "@/components/ui/card"
@@ -13,6 +13,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet"
+import { createClient } from "@/lib/supabase/client"
 
 // Types
 type EmotionColor = "green" | "yellow" | "red" | "blue"
@@ -22,9 +23,16 @@ interface EmotionPing {
   color: EmotionColor
   distanceKm: number
   minutesAgo: number
-  // Pseudo-random but stable position (angle in degrees, radius factor 0-1)
-  angle: number
-  radiusFactor: number
+  latitude: number
+  longitude: number
+  emotion: string
+  intensity: number
+}
+
+interface UserLocation {
+  latitude: number
+  longitude: number
+  accuracy: number
 }
 
 interface EmotionalRadarViewProps {
@@ -43,53 +51,49 @@ const COLOR_MAP: Record<EmotionColor, { bg: string; border: string; label: strin
   yellow: {
     bg: "bg-amber-400",
     border: "border-amber-300",
-    label: "Con energía",
-    message: "Entorno activo y dinámico.",
+    label: "Con energia",
+    message: "Entorno activo y dinamico.",
   },
   red: {
     bg: "bg-red-500",
     border: "border-red-400",
-    label: "En tensión",
+    label: "En tension",
     message: "Entorno tenso. Respira 30s antes de actuar.",
   },
   blue: {
     bg: "bg-blue-500",
     border: "border-blue-400",
-    label: "Sin ánimo",
-    message: "Ambiente melancólico. Un gesto amable puede ayudar.",
+    label: "Sin animo",
+    message: "Ambiente melancolico. Un gesto amable puede ayudar.",
   },
 }
 
-// Generate stable mock data using seed
-function generateMockPings(seed: number = 42): EmotionPing[] {
-  const colors: EmotionColor[] = ["green", "yellow", "red", "blue"]
-  const pings: EmotionPing[] = []
-  
-  // Simple seeded random
-  let s = seed
-  const random = () => {
-    s = (s * 9301 + 49297) % 233280
-    return s / 233280
-  }
-
-  for (let i = 0; i < 35; i++) {
-    pings.push({
-      id: `ping-${i}`,
-      color: colors[Math.floor(random() * 4)],
-      distanceKm: random() * 25, // 0-25km
-      minutesAgo: Math.floor(random() * 120), // 0-120 minutes
-      angle: random() * 360,
-      radiusFactor: 0.15 + random() * 0.85, // 15%-100% from center
-    })
-  }
-  
-  return pings
+// Calculate distance between two coordinates using Haversine formula
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371 // Earth's radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLon = (lon2 - lon1) * Math.PI / 180
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+  return R * c
 }
 
-// Radar range options
-const RANGE_OPTIONS = [1, 5, 10, 20]
+// Calculate angle from user to ping (for radar display)
+function calculateAngle(userLat: number, userLon: number, pingLat: number, pingLon: number): number {
+  const dLon = (pingLon - userLon) * Math.PI / 180
+  const y = Math.sin(dLon) * Math.cos(pingLat * Math.PI / 180)
+  const x = Math.cos(userLat * Math.PI / 180) * Math.sin(pingLat * Math.PI / 180) -
+            Math.sin(userLat * Math.PI / 180) * Math.cos(pingLat * Math.PI / 180) * Math.cos(dLon)
+  let angle = Math.atan2(y, x) * 180 / Math.PI
+  return (angle + 360) % 360
+}
 
 export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps) {
+  const supabase = createClient()
+  
   // State
   const [isRadarActive, setIsRadarActive] = useState(false)
   const [isSharing, setIsSharing] = useState(false)
@@ -97,17 +101,126 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
   const [rangeKm, setRangeKm] = useState(5)
   const [hasLocationPermission, setHasLocationPermission] = useState<boolean | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [selectedPing, setSelectedPing] = useState<EmotionPing | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [userLocation, setUserLocation] = useState<UserLocation | null>(null)
+  const [pings, setPings] = useState<EmotionPing[]>([])
+  const [error, setError] = useState<string | null>(null)
 
-  // Mock data - stable across renders
-  const allPings = useMemo(() => generateMockPings(42), [])
+  // Load user radar settings from profile
+  useEffect(() => {
+    async function loadSettings() {
+      if (!userId) return
+      
+      const { data } = await supabase
+        .from("profiles")
+        .select("radar_enabled, share_location, location_precision")
+        .eq("id", userId)
+        .single()
+      
+      if (data) {
+        setIsRadarActive(data.radar_enabled || false)
+        setIsSharing(data.share_location || false)
+        setLocationPrecision(data.location_precision || "approximate")
+      }
+    }
+    loadSettings()
+  }, [userId, supabase])
+
+  // Save settings to profile when changed
+  const saveSettings = useCallback(async (settings: {
+    radar_enabled?: boolean
+    share_location?: boolean
+    location_precision?: string
+  }) => {
+    if (!userId) return
+    
+    await supabase
+      .from("profiles")
+      .update(settings)
+      .eq("id", userId)
+  }, [userId, supabase])
+
+  // Get user's current location
+  const getCurrentLocation = useCallback((): Promise<UserLocation> => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("Geolocation not supported"))
+        return
+      }
+
+      const options: PositionOptions = {
+        enableHighAccuracy: locationPrecision === "precise",
+        timeout: 10000,
+        maximumAge: locationPrecision === "precise" ? 0 : 60000
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          let { latitude, longitude, accuracy } = position.coords
+          
+          // If approximate precision, round coordinates (about 1km precision)
+          if (locationPrecision === "approximate") {
+            latitude = Math.round(latitude * 100) / 100
+            longitude = Math.round(longitude * 100) / 100
+          }
+          
+          resolve({ latitude, longitude, accuracy })
+        },
+        (error) => {
+          reject(error)
+        },
+        options
+      )
+    })
+  }, [locationPrecision])
+
+  // Fetch nearby pings from Supabase
+  const fetchNearbyPings = useCallback(async (location: UserLocation) => {
+    setIsRefreshing(true)
+    
+    try {
+      // Call the database function to get nearby pings
+      const { data, error: fetchError } = await supabase
+        .rpc("get_nearby_pings", {
+          user_lat: location.latitude,
+          user_lon: location.longitude,
+          radius_km: rangeKm
+        })
+      
+      if (fetchError) {
+        console.error("Error fetching pings:", fetchError)
+        setError("Error al cargar el radar")
+        return
+      }
+      
+      if (data) {
+        const formattedPings: EmotionPing[] = data.map((ping: any) => ({
+          id: ping.id,
+          color: ping.quadrant as EmotionColor,
+          distanceKm: ping.distance_km,
+          minutesAgo: Math.round((Date.now() - new Date(ping.created_at).getTime()) / 60000),
+          latitude: ping.latitude,
+          longitude: ping.longitude,
+          emotion: ping.emotion,
+          intensity: ping.intensity
+        }))
+        setPings(formattedPings)
+      }
+    } catch (err) {
+      console.error("Error:", err)
+      setError("Error al conectar")
+    } finally {
+      setIsRefreshing(false)
+    }
+  }, [supabase, rangeKm])
 
   // Filter pings by range
   const visiblePings = useMemo(() => {
-    if (!isRadarActive || hasLocationPermission === false) return []
-    return allPings.filter((ping) => ping.distanceKm <= rangeKm)
-  }, [allPings, rangeKm, isRadarActive, hasLocationPermission])
+    if (!isRadarActive || hasLocationPermission === false || !userLocation) return []
+    return pings.filter((ping) => ping.distanceKm <= rangeKm)
+  }, [pings, rangeKm, isRadarActive, hasLocationPermission, userLocation])
 
   // Calculate climate summary
   const climateSummary = useMemo(() => {
@@ -132,40 +245,93 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
     return { counts, percentages, dominant, total }
   }, [visiblePings])
 
-  // Handle radar activation
-  const handleActivateRadar = useCallback(() => {
-    if (hasLocationPermission === null) {
-      // First time - show permission request
-      return
-    }
+  // Handle radar activation with real geolocation
+  const handleActivateRadar = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
     
-    setIsLoading(true)
-    setTimeout(() => {
-      setIsRadarActive(true)
-      setIsLoading(false)
-    }, 1500)
-  }, [hasLocationPermission])
-
-  // Handle permission grant
-  const handleGrantPermission = useCallback(() => {
-    setIsLoading(true)
-    setTimeout(() => {
+    try {
+      const location = await getCurrentLocation()
+      setUserLocation(location)
       setHasLocationPermission(true)
+      
+      // Save radar_enabled to profile
+      await saveSettings({ radar_enabled: true })
       setIsRadarActive(true)
+      
+      // Fetch nearby pings
+      await fetchNearbyPings(location)
+    } catch (err: any) {
+      console.error("Location error:", err)
+      if (err.code === 1) { // PERMISSION_DENIED
+        setHasLocationPermission(false)
+      } else {
+        setError("No se pudo obtener la ubicacion")
+      }
+    } finally {
       setIsLoading(false)
-    }, 1500)
-  }, [])
+    }
+  }, [getCurrentLocation, saveSettings, fetchNearbyPings])
+
+  // Handle permission grant (request location)
+  const handleGrantPermission = useCallback(async () => {
+    await handleActivateRadar()
+  }, [handleActivateRadar])
 
   // Handle permission deny
   const handleDenyPermission = useCallback(() => {
     setHasLocationPermission(false)
   }, [])
 
+  // Handle sharing toggle
+  const handleSharingChange = useCallback(async (enabled: boolean) => {
+    setIsSharing(enabled)
+    await saveSettings({ share_location: enabled })
+  }, [saveSettings])
+
+  // Handle precision change
+  const handlePrecisionChange = useCallback(async (precision: "approximate" | "precise") => {
+    setLocationPrecision(precision)
+    await saveSettings({ location_precision: precision })
+  }, [saveSettings])
+
+  // Handle refresh
+  const handleRefresh = useCallback(async () => {
+    if (!userLocation) return
+    
+    try {
+      // Get fresh location
+      const location = await getCurrentLocation()
+      setUserLocation(location)
+      await fetchNearbyPings(location)
+    } catch (err) {
+      console.error("Refresh error:", err)
+    }
+  }, [userLocation, getCurrentLocation, fetchNearbyPings])
+
   // Handle ping click
   const handlePingClick = useCallback((ping: EmotionPing) => {
     setSelectedPing(ping)
     setTimeout(() => setSelectedPing(null), 3000)
   }, [])
+
+  // Auto-refresh pings every 30 seconds when active
+  useEffect(() => {
+    if (!isRadarActive || !userLocation) return
+    
+    const interval = setInterval(() => {
+      fetchNearbyPings(userLocation)
+    }, 30000)
+    
+    return () => clearInterval(interval)
+  }, [isRadarActive, userLocation, fetchNearbyPings])
+
+  // Refetch when range changes
+  useEffect(() => {
+    if (isRadarActive && userLocation) {
+      fetchNearbyPings(userLocation)
+    }
+  }, [rangeKm])
 
   return (
     <div className="fixed inset-0 z-50 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex flex-col">
@@ -180,107 +346,119 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
         
         <div className="text-center">
           <h1 className="text-lg font-medium text-white">Radar emocional</h1>
-          <p className="text-xs text-white/60">Clima emocional anónimo</p>
+          <p className="text-xs text-white/60">Clima emocional anonimo</p>
         </div>
 
-        <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
-          <SheetTrigger asChild>
-            <button className="w-10 h-10 flex items-center justify-center text-white/80 hover:text-white transition-colors">
-              <Settings className="w-5 h-5" />
+        <div className="flex items-center gap-1">
+          {isRadarActive && (
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="w-10 h-10 flex items-center justify-center text-white/80 hover:text-white transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
             </button>
-          </SheetTrigger>
-          <SheetContent side="bottom" className="bg-slate-800 border-slate-700 rounded-t-3xl">
-            <SheetHeader className="mb-4">
-              <SheetTitle className="text-white">Configuración del radar</SheetTitle>
-            </SheetHeader>
-            
-            <div className="space-y-6 pb-safe">
-              {/* Share toggle */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-white font-medium">Compartir mi estado</p>
-                  <p className="text-sm text-white/60">Otros verán tu color (anónimo)</p>
+          )}
+          
+          <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+            <SheetTrigger asChild>
+              <button className="w-10 h-10 flex items-center justify-center text-white/80 hover:text-white transition-colors">
+                <Settings className="w-5 h-5" />
+              </button>
+            </SheetTrigger>
+            <SheetContent side="bottom" className="bg-slate-800 border-slate-700 rounded-t-3xl">
+              <SheetHeader className="mb-4">
+                <SheetTitle className="text-white">Configuracion del radar</SheetTitle>
+              </SheetHeader>
+              
+              <div className="space-y-6 pb-safe">
+                {/* Share toggle */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-white font-medium">Compartir mi estado</p>
+                    <p className="text-sm text-white/60">Otros veran tu color (anonimo)</p>
+                  </div>
+                  <Switch
+                    checked={isSharing}
+                    onCheckedChange={handleSharingChange}
+                  />
                 </div>
-                <Switch
-                  checked={isSharing}
-                  onCheckedChange={setIsSharing}
-                />
-              </div>
 
-              {/* Precision selector */}
-              <div className="space-y-3">
-                <p className="text-white font-medium">Precisión de ubicación</p>
-                <div className="space-y-2">
-                  <button
-                    onClick={() => setLocationPrecision("approximate")}
-                    className={`w-full p-3 rounded-xl flex items-center gap-3 transition-colors ${
-                      locationPrecision === "approximate"
-                        ? "bg-white/20 border border-white/30"
-                        : "bg-white/5 border border-transparent"
-                    }`}
-                  >
-                    <div
-                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                        locationPrecision === "approximate" ? "border-white" : "border-white/40"
+                {/* Precision selector */}
+                <div className="space-y-3">
+                  <p className="text-white font-medium">Precision de ubicacion</p>
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => handlePrecisionChange("approximate")}
+                      className={`w-full p-3 rounded-xl flex items-center gap-3 transition-colors ${
+                        locationPrecision === "approximate"
+                          ? "bg-white/20 border border-white/30"
+                          : "bg-white/5 border border-transparent"
                       }`}
                     >
-                      {locationPrecision === "approximate" && (
-                        <div className="w-2.5 h-2.5 rounded-full bg-white" />
-                      )}
-                    </div>
-                    <div className="text-left">
-                      <p className="text-white">Aproximada (recomendado)</p>
-                      <p className="text-xs text-white/60">Mayor privacidad</p>
-                    </div>
-                  </button>
+                      <div
+                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                          locationPrecision === "approximate" ? "border-white" : "border-white/40"
+                        }`}
+                      >
+                        {locationPrecision === "approximate" && (
+                          <div className="w-2.5 h-2.5 rounded-full bg-white" />
+                        )}
+                      </div>
+                      <div className="text-left">
+                        <p className="text-white">Aproximada (recomendado)</p>
+                        <p className="text-xs text-white/60">Mayor privacidad (~1km)</p>
+                      </div>
+                    </button>
 
-                  <button
-                    onClick={() => setLocationPrecision("precise")}
-                    className={`w-full p-3 rounded-xl flex items-center gap-3 transition-colors ${
-                      locationPrecision === "precise"
-                        ? "bg-white/20 border border-white/30"
-                        : "bg-white/5 border border-transparent"
-                    }`}
-                  >
-                    <div
-                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                        locationPrecision === "precise" ? "border-white" : "border-white/40"
+                    <button
+                      onClick={() => handlePrecisionChange("precise")}
+                      className={`w-full p-3 rounded-xl flex items-center gap-3 transition-colors ${
+                        locationPrecision === "precise"
+                          ? "bg-white/20 border border-white/30"
+                          : "bg-white/5 border border-transparent"
                       }`}
                     >
-                      {locationPrecision === "precise" && (
-                        <div className="w-2.5 h-2.5 rounded-full bg-white" />
-                      )}
-                    </div>
-                    <div className="text-left">
-                      <p className="text-white">Precisa</p>
-                      <p className="text-xs text-white/60">Resultados más exactos</p>
-                    </div>
-                  </button>
+                      <div
+                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                          locationPrecision === "precise" ? "border-white" : "border-white/40"
+                        }`}
+                      >
+                        {locationPrecision === "precise" && (
+                          <div className="w-2.5 h-2.5 rounded-full bg-white" />
+                        )}
+                      </div>
+                      <div className="text-left">
+                        <p className="text-white">Precisa</p>
+                        <p className="text-xs text-white/60">Resultados mas exactos</p>
+                      </div>
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              {/* Privacy note */}
-              <p className="text-xs text-white/50 text-center">
-                No mostramos tu identidad ni tu ubicación exacta. Puedes desactivarlo cuando quieras.
-              </p>
-            </div>
-          </SheetContent>
-        </Sheet>
+                {/* Privacy note */}
+                <p className="text-xs text-white/50 text-center">
+                  No mostramos tu identidad ni tu ubicacion exacta. Los datos expiran en 15 minutos.
+                </p>
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
       </header>
 
       {/* Main content */}
       <div className="flex-1 flex flex-col items-center justify-center px-4 overflow-hidden">
         {/* Permission request state */}
-        {hasLocationPermission === null && !isRadarActive && (
+        {hasLocationPermission === null && !isRadarActive && !isLoading && (
           <Card className="bg-white/10 border-white/20 p-6 mx-4 max-w-sm backdrop-blur-sm">
             <div className="flex flex-col items-center text-center gap-4">
               <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
                 <MapPin className="w-8 h-8 text-white/80" />
               </div>
               <div>
-                <h3 className="text-lg font-medium text-white mb-1">Permite ubicación</h3>
+                <h3 className="text-lg font-medium text-white mb-1">Permite ubicacion</h3>
                 <p className="text-sm text-white/60">
-                  Para ver el clima emocional cercano necesitamos acceso a tu ubicación aproximada.
+                  Para ver el clima emocional cercano necesitamos acceso a tu ubicacion aproximada.
                 </p>
               </div>
               <div className="flex gap-3 w-full">
@@ -296,7 +474,7 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
                   className="flex-1 bg-white text-slate-900 hover:bg-white/90"
                   disabled={isLoading}
                 >
-                  {isLoading ? "Activando..." : "Permitir"}
+                  Permitir
                 </Button>
               </div>
             </div>
@@ -311,9 +489,9 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
                 <AlertCircle className="w-8 h-8 text-red-400" />
               </div>
               <div>
-                <h3 className="text-lg font-medium text-white mb-1">Ubicación desactivada</h3>
+                <h3 className="text-lg font-medium text-white mb-1">Ubicacion desactivada</h3>
                 <p className="text-sm text-white/60">
-                  Sin acceso a ubicación no podemos mostrar el radar emocional.
+                  Sin acceso a ubicacion no podemos mostrar el radar emocional. Activa la ubicacion en la configuracion de tu navegador.
                 </p>
               </div>
               <Button
@@ -326,6 +504,13 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
           </Card>
         )}
 
+        {/* Error state */}
+        {error && (
+          <Card className="bg-red-500/10 border-red-500/20 p-4 mx-4 max-w-sm backdrop-blur-sm mb-4">
+            <p className="text-red-400 text-sm text-center">{error}</p>
+          </Card>
+        )}
+
         {/* Loading state */}
         {isLoading && (
           <div className="flex flex-col items-center gap-4">
@@ -334,12 +519,12 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
                 <div className="w-16 h-16 rounded-full border-4 border-white/40 animate-pulse" />
               </div>
             </div>
-            <p className="text-white/60">Escaneando área...</p>
+            <p className="text-white/60">Obteniendo ubicacion...</p>
           </div>
         )}
 
         {/* Active radar */}
-        {isRadarActive && hasLocationPermission && !isLoading && (
+        {isRadarActive && hasLocationPermission && !isLoading && userLocation && (
           <>
             {/* Radar visualization */}
             <div className="relative w-full max-w-[320px] aspect-square">
@@ -380,9 +565,15 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
                 {/* Emotion pings */}
                 {visiblePings.map((ping) => {
                   const maxRadius = 130
-                  const normalizedDistance = ping.distanceKm / rangeKm
-                  const radius = normalizedDistance * maxRadius * ping.radiusFactor
-                  const angleRad = (ping.angle * Math.PI) / 180
+                  const normalizedDistance = Math.min(ping.distanceKm / rangeKm, 1)
+                  const radius = normalizedDistance * maxRadius
+                  const angle = calculateAngle(
+                    userLocation.latitude, 
+                    userLocation.longitude, 
+                    ping.latitude, 
+                    ping.longitude
+                  )
+                  const angleRad = (angle - 90) * Math.PI / 180 // Adjust so 0 is up
                   const x = 150 + Math.cos(angleRad) * radius
                   const y = 150 + Math.sin(angleRad) * radius
 
@@ -421,7 +612,7 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
               {/* Selected ping tooltip */}
               {selectedPing && (
                 <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-sm text-white text-sm px-3 py-2 rounded-lg">
-                  Aprox. {selectedPing.distanceKm.toFixed(1)} km · Hace {selectedPing.minutesAgo} min
+                  {selectedPing.emotion} - {selectedPing.distanceKm.toFixed(1)} km - Hace {selectedPing.minutesAgo} min
                 </div>
               )}
             </div>
@@ -503,13 +694,26 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
         </div>
       )}
 
-      {/* Activate radar CTA (when inactive) */}
+      {/* Empty state when radar is active but no pings */}
+      {isRadarActive && hasLocationPermission && visiblePings.length === 0 && !isLoading && userLocation && (
+        <div className="px-4 pb-safe mb-4">
+          <Card className="bg-white/10 border-white/20 p-4 backdrop-blur-sm text-center">
+            <p className="text-white/60 text-sm">
+              No hay registros emocionales cercanos en los ultimos 15 minutos.
+              {!isSharing && " Activa 'Compartir mi estado' para contribuir al radar."}
+            </p>
+          </Card>
+        </div>
+      )}
+
+      {/* Activate radar CTA (when inactive but has permission) */}
       {!isRadarActive && hasLocationPermission && !isLoading && (
         <div className="px-4 pb-safe mb-4">
           <Button
             onClick={handleActivateRadar}
             className="w-full bg-white text-slate-900 hover:bg-white/90 h-12"
           >
+            <MapPin className="w-5 h-5 mr-2" />
             Activar radar
           </Button>
         </div>

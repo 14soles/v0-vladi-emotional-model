@@ -161,31 +161,42 @@ export function HomeView({ userId, userProfile, onAvatarClick, onNotificationsCl
         </div>
 
         {/* Radar emocional banner */}
-        <button
-          onClick={onRadarClick}
-          className="w-full px-5 py-3 border-b border-gray-100 flex items-center gap-3 hover:bg-gray-50 active:bg-gray-100 transition-colors"
-        >
-          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-            <svg className="w-5 h-5 text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <circle cx="12" cy="12" r="10" />
-              <circle cx="12" cy="12" r="6" />
-              <circle cx="12" cy="12" r="2" />
-              <line x1="12" y1="2" x2="12" y2="6" />
-              <line x1="12" y1="18" x2="12" y2="22" />
-              <line x1="2" y1="12" x2="6" y2="12" />
-              <line x1="18" y1="12" x2="22" y2="12" />
-            </svg>
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-gray-500" />
-              <span className="text-sm text-gray-700 font-medium">Radar emocional</span>
+        <div className="px-4 py-3">
+          <button
+            onClick={onRadarClick}
+            className="relative w-full rounded-2xl overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.12)] active:shadow-[0_1px_6px_rgba(0,0,0,0.06)] transition-shadow"
+          >
+            {/* Map background image */}
+            <div className="absolute inset-0">
+              <img
+                src="/images/radar-map-bg.jpg"
+                alt=""
+                className="w-full h-full object-cover opacity-40"
+                crossOrigin="anonymous"
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-white/70 via-white/30 to-white/70" />
             </div>
-          </div>
-          <svg className="w-4 h-4 text-gray-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M9 18l6-6-6-6" />
-          </svg>
-        </button>
+
+            {/* Content */}
+            <div className="relative flex items-center justify-between px-5 py-5">
+              {/* Radar icon (concentric circles) */}
+              <div className="flex-shrink-0">
+                <svg className="w-12 h-12 text-gray-800" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <circle cx="24" cy="24" r="20" />
+                  <circle cx="24" cy="24" r="13" />
+                  <circle cx="24" cy="24" r="6" />
+                  <circle cx="24" cy="24" r="2" fill="currentColor" />
+                </svg>
+              </div>
+
+              {/* Location info */}
+              <div className="flex items-center gap-2">
+                <MapPin className="w-5 h-5 text-gray-700" />
+                <span className="text-base text-gray-800 font-medium">30 personas &middot; 10km</span>
+              </div>
+            </div>
+          </button>
+        </div>
 
         <SocialFeed userId={userId} filterGroupId={selectedGroup} />
       </div>

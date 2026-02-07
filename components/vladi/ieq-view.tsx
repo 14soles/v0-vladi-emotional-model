@@ -30,11 +30,28 @@ const QUADRANT_COLORS = {
   sin_animo: "#466D91",
 }
 
-const GRADIENT_COLORS = {
-  calma: { from: "#8BB458", to: "#B4D987" },
-  energia: { from: "#F39C12", to: "#FDD836" },
-  tension: { from: "#F94A44", to: "#FF7A59" },
-  sin_animo: { from: "#5A99D4", to: "#80B4E5" },
+// Mapping de categoría a imagen y etiqueta
+const EMOTIONAL_STATE_CONFIG = {
+  calma: {
+    image: "/images/circulo-verde-movimiento.png",
+    label: "En calma",
+    textColor: "#6B8E23", // Verde oliva
+  },
+  energia: {
+    image: "/images/circulo-amarillo-movimiento.png",
+    label: "Con energía",
+    textColor: "#DAA520", // Dorado
+  },
+  tension: {
+    image: "/images/circulo-rojo-movimiento.png",
+    label: "En tensión",
+    textColor: "#DC143C", // Rojo carmesí
+  },
+  sin_animo: {
+    image: "/images/circulo-azul-movimiento.png",
+    label: "Sin ánimo",
+    textColor: "#4682B4", // Azul acero
+  },
 }
 
 export function IEQView({
@@ -139,7 +156,8 @@ export function IEQView({
     return `${past.toLocaleDateString("es-ES", { day: "2-digit", month: "short" })} - ${now.toLocaleDateString("es-ES", { day: "2-digit", month: "short" })}`
   }
 
-  const gradientColors = GRADIENT_COLORS[emotionalState.category]
+  // Obtener configuración del estado emocional basada en el cálculo
+  const stateConfig = EMOTIONAL_STATE_CONFIG[emotionalState.category]
 
   return (
     <div className="flex-1 overflow-y-auto pb-24 bg-gray-50 min-h-0">
@@ -200,13 +218,20 @@ export function IEQView({
               <p className="text-sm text-gray-500 italic mb-6">{emotionalState.feedbackText}</p>
 
               <div className="flex items-center justify-center">
-                <div
-                  className="w-64 h-64 rounded-full flex items-center justify-center relative overflow-hidden"
-                  style={{
-                    background: `linear-gradient(135deg, ${gradientColors.from} 0%, ${gradientColors.to} 100%)`,
-                  }}
-                >
-                  <span className="text-white text-3xl font-medium z-10 relative">{emotionalState.categoryLabel}</span>
+                <div className="w-64 h-64 flex items-center justify-center relative">
+                  {/* Imagen del círculo según el cuadrante dominante */}
+                  <img
+                    src={stateConfig.image}
+                    alt={stateConfig.label}
+                    className="w-full h-full object-contain absolute inset-0"
+                  />
+                  {/* Etiqueta del estado emocional */}
+                  <span 
+                    className="text-2xl font-semibold z-10 relative drop-shadow-sm"
+                    style={{ color: stateConfig.textColor }}
+                  >
+                    {stateConfig.label}
+                  </span>
                 </div>
               </div>
             </>

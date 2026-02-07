@@ -118,27 +118,29 @@ export function LearnScreen({
           }
         }
 
-        // Get intervention stats
+        // Get intervention stats (only completed interventions with ended_at)
         const { data: interventionLogs } = await supabase
           .from("interventions_log")
           .select("*")
           .eq("user_id", userId)
-          .eq("skipped", false)
-          .not("completed_at", "is", null)
+          .not("ended_at", "is", null)
 
         if (interventionLogs && interventionLogs.length > 0) {
           const statsByType: Record<string, { count: number; totalEffectiveness: number; totalUtility: number }> = {}
           
           for (const log of interventionLogs) {
-            if (!statsByType[log.intervention_type]) {
-              statsByType[log.intervention_type] = { count: 0, totalEffectiveness: 0, totalUtility: 0 }
+            const interventionType = log.intervention // Column is 'intervention', not 'intervention_type'
+            if (!interventionType) continue
+            
+            if (!statsByType[interventionType]) {
+              statsByType[interventionType] = { count: 0, totalEffectiveness: 0, totalUtility: 0 }
             }
-            statsByType[log.intervention_type].count++
+            statsByType[interventionType].count++
             if (log.intensity_before !== null && log.intensity_after !== null) {
-              statsByType[log.intervention_type].totalEffectiveness += (log.intensity_before - log.intensity_after)
+              statsByType[interventionType].totalEffectiveness += (log.intensity_before - log.intensity_after)
             }
-            if (log.perceived_utility !== null) {
-              statsByType[log.intervention_type].totalUtility += log.perceived_utility
+            if (log.helpfulness !== null) {
+              statsByType[interventionType].totalUtility += log.helpfulness // Column is 'helpfulness', not 'perceived_utility'
             }
           }
 

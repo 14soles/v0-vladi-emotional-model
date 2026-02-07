@@ -441,6 +441,7 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
             onAvatarClick={handleOpenProfile}
             onNotificationsClick={handleNotificationsClick}
             onPersonasClick={handleOpenGroupsPeople}
+            onRadarClick={handleOpenEmotionalRadar}
           />
         )
       case "stats":
@@ -462,7 +463,6 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
             onAvatarClick={handleOpenProfile}
             onNotificationsClick={handleNotificationsClick}
             notificationCount={notificationCount}
-            onRadarClick={handleOpenEmotionalRadar}
           />
         )
       case "aprende":
@@ -495,7 +495,6 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
             onAvatarClick={handleOpenProfile}
             onNotificationsClick={handleNotificationsClick}
             notificationCount={notificationCount}
-            onRadarClick={handleOpenEmotionalRadar}
           />
         )
     }

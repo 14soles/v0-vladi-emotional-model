@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { User } from "lucide-react"
+import { User, MapPin } from "lucide-react"
 import { SocialFeed } from "./social-feed"
 import { CommonHeader } from "./common-header"
 import { supabase } from "@/lib/supabase/client"
@@ -16,6 +16,7 @@ interface HomeViewProps {
   onAvatarClick?: () => void
   onNotificationsClick?: () => void
   onPersonasClick?: () => void
+  onRadarClick?: () => void
 }
 
 interface Group {
@@ -24,7 +25,7 @@ interface Group {
   is_system: boolean
 }
 
-export function HomeView({ userId, userProfile, onAvatarClick, onNotificationsClick, onPersonasClick }: HomeViewProps) {
+export function HomeView({ userId, userProfile, onAvatarClick, onNotificationsClick, onPersonasClick, onRadarClick }: HomeViewProps) {
   const [selectedGroup, setSelectedGroup] = useState<string>("todos")
   const [groups, setGroups] = useState<Group[]>([])
   const [notificationCount, setNotificationCount] = useState(0)
@@ -158,6 +159,33 @@ export function HomeView({ userId, userProfile, onAvatarClick, onNotificationsCl
             </button>
           </div>
         </div>
+
+        {/* Radar emocional banner */}
+        <button
+          onClick={onRadarClick}
+          className="w-full px-5 py-3 border-b border-gray-100 flex items-center gap-3 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+        >
+          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+            <svg className="w-5 h-5 text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <circle cx="12" cy="12" r="10" />
+              <circle cx="12" cy="12" r="6" />
+              <circle cx="12" cy="12" r="2" />
+              <line x1="12" y1="2" x2="12" y2="6" />
+              <line x1="12" y1="18" x2="12" y2="22" />
+              <line x1="2" y1="12" x2="6" y2="12" />
+              <line x1="18" y1="12" x2="22" y2="12" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-gray-500" />
+              <span className="text-sm text-gray-700 font-medium">Radar emocional</span>
+            </div>
+          </div>
+          <svg className="w-4 h-4 text-gray-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </button>
 
         <SocialFeed userId={userId} filterGroupId={selectedGroup} />
       </div>

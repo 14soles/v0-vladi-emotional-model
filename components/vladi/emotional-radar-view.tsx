@@ -13,7 +13,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet"
-import { createClient } from "@/lib/supabase/client"
+import { supabase } from "@/lib/supabase/client"
 
 // Types
 type EmotionColor = "green" | "yellow" | "red" | "blue"
@@ -92,8 +92,6 @@ function calculateAngle(userLat: number, userLon: number, pingLat: number, pingL
 }
 
 export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps) {
-  const supabase = createClient()
-  
   // State
   const [isRadarActive, setIsRadarActive] = useState(false)
   const [isSharing, setIsSharing] = useState(false)
@@ -113,20 +111,25 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
     async function loadSettings() {
       if (!userId) return
       
-      const { data } = await supabase
-        .from("profiles")
-        .select("radar_enabled, share_location, location_precision")
-        .eq("id", userId)
-        .single()
-      
-      if (data) {
-        setIsRadarActive(data.radar_enabled || false)
-        setIsSharing(data.share_location || false)
-        setLocationPrecision(data.location_precision || "approximate")
+      try {
+        const { data } = await supabase
+          .from("profiles")
+          .select("radar_enabled, share_location, location_precision")
+          .eq("id", userId)
+          .single()
+        
+        if (data) {
+          // Only load preferences, don't auto-activate radar
+          // (radar_enabled just remembers preference for next time)
+          setIsSharing(data.share_location || false)
+          setLocationPrecision(data.location_precision || "approximate")
+        }
+      } catch (err) {
+        console.error("Error loading radar settings:", err)
       }
     }
     loadSettings()
-  }, [userId, supabase])
+  }, [userId])
 
   // Save settings to profile when changed
   const saveSettings = useCallback(async (settings: {
@@ -140,40 +143,54 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
       .from("profiles")
       .update(settings)
       .eq("id", userId)
-  }, [userId, supabase])
+  }, [userId])
 
-  // Get user's current location
+  // Get user's current location with automatic retries for transient failures
   const getCurrentLocation = useCallback((): Promise<UserLocation> => {
-    return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) {
-        reject(new Error("Geolocation not supported"))
-        return
-      }
+    const MAX_RETRIES = 3
+    const RETRY_DELAY = 1500 // ms between retries
 
-      const options: PositionOptions = {
-        enableHighAccuracy: locationPrecision === "precise",
-        timeout: 10000,
-        maximumAge: locationPrecision === "precise" ? 0 : 60000
-      }
+    function attempt(retriesLeft: number): Promise<UserLocation> {
+      return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+          reject(new Error("Geolocation not supported"))
+          return
+        }
 
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          let { latitude, longitude, accuracy } = position.coords
-          
-          // If approximate precision, round coordinates (about 1km precision)
-          if (locationPrecision === "approximate") {
-            latitude = Math.round(latitude * 100) / 100
-            longitude = Math.round(longitude * 100) / 100
-          }
-          
-          resolve({ latitude, longitude, accuracy })
-        },
-        (error) => {
-          reject(error)
-        },
-        options
-      )
-    })
+        const options: PositionOptions = {
+          enableHighAccuracy: locationPrecision === "precise",
+          timeout: 15000,
+          maximumAge: locationPrecision === "precise" ? 0 : 60000
+        }
+
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            let { latitude, longitude, accuracy } = position.coords
+            
+            // If approximate precision, round coordinates (about 1km precision)
+            if (locationPrecision === "approximate") {
+              latitude = Math.round(latitude * 100) / 100
+              longitude = Math.round(longitude * 100) / 100
+            }
+            
+            resolve({ latitude, longitude, accuracy })
+          },
+          (err) => {
+            // Error code 2 = POSITION_UNAVAILABLE (transient, worth retrying)
+            if (err.code === 2 && retriesLeft > 0) {
+              setTimeout(() => {
+                attempt(retriesLeft - 1).then(resolve, reject)
+              }, RETRY_DELAY)
+            } else {
+              reject(err)
+            }
+          },
+          options
+        )
+      })
+    }
+
+    return attempt(MAX_RETRIES)
   }, [locationPrecision])
 
   // Fetch nearby pings from Supabase
@@ -191,11 +208,13 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
       
       if (fetchError) {
         console.error("Error fetching pings:", fetchError)
-        setError("Error al cargar el radar")
+        // Don't set error - the RPC might not exist yet or RLS blocks, 
+        // just show empty radar
+        setPings([])
         return
       }
       
-      if (data) {
+      if (data && data.length > 0) {
         const formattedPings: EmotionPing[] = data.map((ping: any) => ({
           id: ping.id,
           color: ping.quadrant as EmotionColor,
@@ -207,14 +226,17 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
           intensity: ping.intensity
         }))
         setPings(formattedPings)
+      } else {
+        setPings([])
       }
     } catch (err) {
-      console.error("Error:", err)
-      setError("Error al conectar")
+      console.error("Fetch error:", err)
+      // Don't block the radar on fetch errors - show empty
+      setPings([])
     } finally {
       setIsRefreshing(false)
     }
-  }, [supabase, rangeKm])
+  }, [rangeKm])
 
   // Filter pings by range
   const visiblePings = useMemo(() => {
@@ -255,8 +277,10 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
       setUserLocation(location)
       setHasLocationPermission(true)
       
-      // Save radar_enabled to profile
-      await saveSettings({ radar_enabled: true })
+      // Save radar_enabled to profile (best effort, don't block)
+      saveSettings({ radar_enabled: true }).catch(err => {
+        console.error("Error saving settings:", err)
+      })
       setIsRadarActive(true)
       
       // Fetch nearby pings
@@ -266,7 +290,9 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
       if (err.code === 1) { // PERMISSION_DENIED
         setHasLocationPermission(false)
       } else {
-        setError("No se pudo obtener la ubicacion")
+        setError("No se pudo obtener la ubicacion. Intenta de nuevo.")
+        // Reset to allow retry
+        setHasLocationPermission(null)
       }
     } finally {
       setIsLoading(false)
@@ -331,22 +357,23 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
     if (isRadarActive && userLocation) {
       fetchNearbyPings(userLocation)
     }
-  }, [rangeKm])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rangeKm, isRadarActive, fetchNearbyPings])
 
   return (
-    <div className="fixed inset-0 z-50 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex flex-col">
+    <div className="fixed inset-0 z-50 bg-white flex flex-col">
       {/* Header */}
-      <header className="flex items-center justify-between px-4 py-3 pt-safe">
+      <header className="flex items-center justify-between px-4 py-3 pt-safe border-b border-gray-100">
         <button
           onClick={onClose}
-          className="w-10 h-10 flex items-center justify-center text-white/80 hover:text-white transition-colors"
+          className="w-10 h-10 flex items-center justify-center text-gray-700 hover:text-gray-900 transition-colors"
         >
           <ArrowLeft className="w-6 h-6" />
         </button>
         
         <div className="text-center">
-          <h1 className="text-lg font-medium text-white">Radar emocional</h1>
-          <p className="text-xs text-white/60">Clima emocional anonimo</p>
+          <h1 className="text-lg font-medium text-gray-900">Radar emocional</h1>
+          <p className="text-xs text-gray-500">Clima emocional cercano</p>
         </div>
 
         <div className="flex items-center gap-1">
@@ -354,7 +381,7 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
             <button
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="w-10 h-10 flex items-center justify-center text-white/80 hover:text-white transition-colors disabled:opacity-50"
+              className="w-10 h-10 flex items-center justify-center text-gray-500 hover:text-gray-900 transition-colors disabled:opacity-50"
             >
               <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
             </button>
@@ -362,21 +389,21 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
           
           <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
             <SheetTrigger asChild>
-              <button className="w-10 h-10 flex items-center justify-center text-white/80 hover:text-white transition-colors">
+              <button className="w-10 h-10 flex items-center justify-center text-gray-500 hover:text-gray-900 transition-colors">
                 <Settings className="w-5 h-5" />
               </button>
             </SheetTrigger>
-            <SheetContent side="bottom" className="bg-slate-800 border-slate-700 rounded-t-3xl">
+            <SheetContent side="bottom" className="bg-white border-gray-200 rounded-t-3xl">
               <SheetHeader className="mb-4">
-                <SheetTitle className="text-white">Configuracion del radar</SheetTitle>
+                <SheetTitle className="text-gray-900">Configuracion del radar</SheetTitle>
               </SheetHeader>
               
               <div className="space-y-6 pb-safe">
                 {/* Share toggle */}
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-white font-medium">Compartir mi estado</p>
-                    <p className="text-sm text-white/60">Otros veran tu color (anonimo)</p>
+                    <p className="text-gray-900 font-medium">Compartir mi estado</p>
+                    <p className="text-sm text-gray-500">Otros veran tu color (anonimo)</p>
                   </div>
                   <Switch
                     checked={isSharing}
@@ -386,28 +413,28 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
 
                 {/* Precision selector */}
                 <div className="space-y-3">
-                  <p className="text-white font-medium">Precision de ubicacion</p>
+                  <p className="text-gray-900 font-medium">Precision de ubicacion</p>
                   <div className="space-y-2">
                     <button
                       onClick={() => handlePrecisionChange("approximate")}
                       className={`w-full p-3 rounded-xl flex items-center gap-3 transition-colors ${
                         locationPrecision === "approximate"
-                          ? "bg-white/20 border border-white/30"
-                          : "bg-white/5 border border-transparent"
+                          ? "bg-gray-100 border border-gray-300"
+                          : "bg-gray-50 border border-transparent"
                       }`}
                     >
                       <div
                         className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                          locationPrecision === "approximate" ? "border-white" : "border-white/40"
+                          locationPrecision === "approximate" ? "border-gray-900" : "border-gray-300"
                         }`}
                       >
                         {locationPrecision === "approximate" && (
-                          <div className="w-2.5 h-2.5 rounded-full bg-white" />
+                          <div className="w-2.5 h-2.5 rounded-full bg-gray-900" />
                         )}
                       </div>
                       <div className="text-left">
-                        <p className="text-white">Aproximada (recomendado)</p>
-                        <p className="text-xs text-white/60">Mayor privacidad (~1km)</p>
+                        <p className="text-gray-900">Aproximada (recomendado)</p>
+                        <p className="text-xs text-gray-500">Mayor privacidad (~1km)</p>
                       </div>
                     </button>
 
@@ -415,29 +442,29 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
                       onClick={() => handlePrecisionChange("precise")}
                       className={`w-full p-3 rounded-xl flex items-center gap-3 transition-colors ${
                         locationPrecision === "precise"
-                          ? "bg-white/20 border border-white/30"
-                          : "bg-white/5 border border-transparent"
+                          ? "bg-gray-100 border border-gray-300"
+                          : "bg-gray-50 border border-transparent"
                       }`}
                     >
                       <div
                         className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                          locationPrecision === "precise" ? "border-white" : "border-white/40"
+                          locationPrecision === "precise" ? "border-gray-900" : "border-gray-300"
                         }`}
                       >
                         {locationPrecision === "precise" && (
-                          <div className="w-2.5 h-2.5 rounded-full bg-white" />
+                          <div className="w-2.5 h-2.5 rounded-full bg-gray-900" />
                         )}
                       </div>
                       <div className="text-left">
-                        <p className="text-white">Precisa</p>
-                        <p className="text-xs text-white/60">Resultados mas exactos</p>
+                        <p className="text-gray-900">Precisa</p>
+                        <p className="text-xs text-gray-500">Resultados mas exactos</p>
                       </div>
                     </button>
                   </div>
                 </div>
 
                 {/* Privacy note */}
-                <p className="text-xs text-white/50 text-center">
+                <p className="text-xs text-gray-400 text-center">
                   No mostramos tu identidad ni tu ubicacion exacta. Los datos expiran en 15 minutos.
                 </p>
               </div>
@@ -450,14 +477,14 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
       <div className="flex-1 flex flex-col items-center justify-center px-4 overflow-hidden">
         {/* Permission request state */}
         {hasLocationPermission === null && !isRadarActive && !isLoading && (
-          <Card className="bg-white/10 border-white/20 p-6 mx-4 max-w-sm backdrop-blur-sm">
+          <Card className="bg-gray-50 border-gray-200 p-6 mx-4 max-w-sm">
             <div className="flex flex-col items-center text-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
-                <MapPin className="w-8 h-8 text-white/80" />
+              <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center">
+                <MapPin className="w-8 h-8 text-gray-500" />
               </div>
               <div>
-                <h3 className="text-lg font-medium text-white mb-1">Permite ubicacion</h3>
-                <p className="text-sm text-white/60">
+                <h3 className="text-lg font-medium text-gray-900 mb-1">Permite ubicacion</h3>
+                <p className="text-sm text-gray-500">
                   Para ver el clima emocional cercano necesitamos acceso a tu ubicacion aproximada.
                 </p>
               </div>
@@ -465,13 +492,13 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
                 <Button
                   variant="ghost"
                   onClick={handleDenyPermission}
-                  className="flex-1 text-white/70 hover:text-white hover:bg-white/10"
+                  className="flex-1 text-gray-500 hover:text-gray-900 hover:bg-gray-100"
                 >
                   Ahora no
                 </Button>
                 <Button
                   onClick={handleGrantPermission}
-                  className="flex-1 bg-white text-slate-900 hover:bg-white/90"
+                  className="flex-1 bg-gray-900 text-white hover:bg-gray-800"
                   disabled={isLoading}
                 >
                   Permitir
@@ -483,20 +510,20 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
 
         {/* Permission denied state */}
         {hasLocationPermission === false && (
-          <Card className="bg-white/10 border-white/20 p-6 mx-4 max-w-sm backdrop-blur-sm">
+          <Card className="bg-red-50 border-red-200 p-6 mx-4 max-w-sm">
             <div className="flex flex-col items-center text-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center">
-                <AlertCircle className="w-8 h-8 text-red-400" />
+              <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertCircle className="w-8 h-8 text-red-500" />
               </div>
               <div>
-                <h3 className="text-lg font-medium text-white mb-1">Ubicacion desactivada</h3>
-                <p className="text-sm text-white/60">
+                <h3 className="text-lg font-medium text-gray-900 mb-1">Ubicacion desactivada</h3>
+                <p className="text-sm text-gray-500">
                   Sin acceso a ubicacion no podemos mostrar el radar emocional. Activa la ubicacion en la configuracion de tu navegador.
                 </p>
               </div>
               <Button
                 onClick={() => setHasLocationPermission(null)}
-                className="bg-white text-slate-900 hover:bg-white/90"
+                className="bg-gray-900 text-white hover:bg-gray-800"
               >
                 Intentar de nuevo
               </Button>
@@ -506,20 +533,20 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
 
         {/* Error state */}
         {error && (
-          <Card className="bg-red-500/10 border-red-500/20 p-4 mx-4 max-w-sm backdrop-blur-sm mb-4">
-            <p className="text-red-400 text-sm text-center">{error}</p>
+          <Card className="bg-red-50 border-red-200 p-4 mx-4 max-w-sm mb-4">
+            <p className="text-red-600 text-sm text-center">{error}</p>
           </Card>
         )}
 
         {/* Loading state */}
         {isLoading && (
           <div className="flex flex-col items-center gap-4">
-            <div className="w-48 h-48 rounded-full border-4 border-white/20 animate-pulse flex items-center justify-center">
-              <div className="w-32 h-32 rounded-full border-4 border-white/30 animate-pulse flex items-center justify-center">
-                <div className="w-16 h-16 rounded-full border-4 border-white/40 animate-pulse" />
+            <div className="w-48 h-48 rounded-full border-4 border-gray-200 animate-pulse flex items-center justify-center">
+              <div className="w-32 h-32 rounded-full border-4 border-gray-300 animate-pulse flex items-center justify-center">
+                <div className="w-16 h-16 rounded-full border-4 border-gray-400 animate-pulse" />
               </div>
             </div>
-            <p className="text-white/60">Obteniendo ubicacion...</p>
+            <p className="text-gray-500">Obteniendo ubicacion...</p>
           </div>
         )}
 
@@ -530,11 +557,11 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
             <div className="relative w-full max-w-[320px] aspect-square">
               {/* SVG Radar */}
               <svg viewBox="0 0 300 300" className="w-full h-full">
-                {/* Background glow */}
+                {/* Background */}
                 <defs>
                   <radialGradient id="radarGlow" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stopColor="rgba(255,255,255,0.1)" />
-                    <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+                    <stop offset="0%" stopColor="rgba(243,244,246,0.8)" />
+                    <stop offset="100%" stopColor="rgba(243,244,246,0)" />
                   </radialGradient>
                 </defs>
                 <circle cx="150" cy="150" r="145" fill="url(#radarGlow)" />
@@ -547,20 +574,20 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
                     cy="150"
                     r={140 * factor}
                     fill="none"
-                    stroke="rgba(255,255,255,0.15)"
+                    stroke="rgba(209,213,219,0.6)"
                     strokeWidth="1"
                   />
                 ))}
 
                 {/* Cross lines */}
-                <line x1="150" y1="10" x2="150" y2="290" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
-                <line x1="10" y1="150" x2="290" y2="150" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
-                <line x1="45" y1="45" x2="255" y2="255" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
-                <line x1="255" y1="45" x2="45" y2="255" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+                <line x1="150" y1="10" x2="150" y2="290" stroke="rgba(209,213,219,0.4)" strokeWidth="1" />
+                <line x1="10" y1="150" x2="290" y2="150" stroke="rgba(209,213,219,0.4)" strokeWidth="1" />
+                <line x1="45" y1="45" x2="255" y2="255" stroke="rgba(209,213,219,0.3)" strokeWidth="1" />
+                <line x1="255" y1="45" x2="45" y2="255" stroke="rgba(209,213,219,0.3)" strokeWidth="1" />
 
                 {/* Center point (user) */}
-                <circle cx="150" cy="150" r="8" fill="white" />
-                <circle cx="150" cy="150" r="12" fill="none" stroke="white" strokeWidth="2" opacity="0.5" />
+                <circle cx="150" cy="150" r="8" fill="#1F2937" />
+                <circle cx="150" cy="150" r="12" fill="none" stroke="#1F2937" strokeWidth="2" opacity="0.3" />
 
                 {/* Emotion pings */}
                 {visiblePings.map((ping) => {
@@ -611,7 +638,7 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
 
               {/* Selected ping tooltip */}
               {selectedPing && (
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-sm text-white text-sm px-3 py-2 rounded-lg">
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-3 py-2 rounded-lg shadow-lg">
                   {selectedPing.emotion} - {selectedPing.distanceKm.toFixed(1)} km - Hace {selectedPing.minutesAgo} min
                 </div>
               )}
@@ -619,14 +646,14 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
 
             {/* Range slider */}
             <div className="w-full max-w-[320px] mt-6 px-2">
-              <div className="flex items-center justify-between text-sm text-white/60 mb-2">
+              <div className="flex items-center justify-between text-sm text-gray-500 mb-2">
                 <span>Alcance</span>
-                <span className="font-medium text-white">{rangeKm} km</span>
+                <span className="font-medium text-gray-900">{rangeKm} km</span>
               </div>
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setRangeKm(Math.max(1, rangeKm - 1))}
-                  className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
+                  className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700 hover:bg-gray-200 transition-colors"
                 >
                   -
                 </button>
@@ -640,7 +667,7 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
                 />
                 <button
                   onClick={() => setRangeKm(Math.min(20, rangeKm + 1))}
-                  className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
+                  className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700 hover:bg-gray-200 transition-colors"
                 >
                   +
                 </button>
@@ -648,7 +675,7 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
             </div>
 
             {/* People count */}
-            <p className="text-white/70 text-sm mt-4">
+            <p className="text-gray-600 text-sm mt-4">
               <Users className="w-4 h-4 inline mr-1" />
               {visiblePings.length} personas en los {rangeKm} km
             </p>
@@ -659,9 +686,9 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
       {/* Climate summary card */}
       {isRadarActive && hasLocationPermission && climateSummary && !isLoading && (
         <div className="px-4 pb-safe mb-4">
-          <Card className="bg-white/10 border-white/20 p-4 backdrop-blur-sm">
-            <h3 className="text-sm font-medium text-white/80 mb-3 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+          <Card className="bg-gray-50 border-gray-200 p-4">
+            <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-gray-900 animate-pulse" />
               Clima cercano
             </h3>
             
@@ -677,7 +704,7 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
             </div>
 
             {/* Percentages */}
-            <div className="flex justify-between text-xs text-white/60 mb-3">
+            <div className="flex justify-between text-xs text-gray-500 mb-3">
               {(["green", "yellow", "red", "blue"] as EmotionColor[]).map((color) => (
                 <div key={color} className="flex items-center gap-1">
                   <div className={`w-2 h-2 rounded-full ${COLOR_MAP[color].bg}`} />
@@ -687,7 +714,7 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
             </div>
 
             {/* Contextual message */}
-            <p className="text-sm text-white/80">
+            <p className="text-sm text-gray-700">
               {COLOR_MAP[climateSummary.dominant].message}
             </p>
           </Card>
@@ -697,8 +724,8 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
       {/* Empty state when radar is active but no pings */}
       {isRadarActive && hasLocationPermission && visiblePings.length === 0 && !isLoading && userLocation && (
         <div className="px-4 pb-safe mb-4">
-          <Card className="bg-white/10 border-white/20 p-4 backdrop-blur-sm text-center">
-            <p className="text-white/60 text-sm">
+          <Card className="bg-gray-50 border-gray-200 p-4 text-center">
+            <p className="text-gray-500 text-sm">
               No hay registros emocionales cercanos en los ultimos 15 minutos.
               {!isSharing && " Activa 'Compartir mi estado' para contribuir al radar."}
             </p>
@@ -711,7 +738,7 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
         <div className="px-4 pb-safe mb-4">
           <Button
             onClick={handleActivateRadar}
-            className="w-full bg-white text-slate-900 hover:bg-white/90 h-12"
+            className="w-full bg-gray-900 text-white hover:bg-gray-800 h-12"
           >
             <MapPin className="w-5 h-5 mr-2" />
             Activar radar

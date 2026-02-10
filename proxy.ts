@@ -1,7 +1,14 @@
 import { updateSession } from "@/lib/supabase/proxy"
-import type { NextRequest } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
 
 export async function proxy(request: NextRequest) {
+  // Skip auth session check for public routes and API routes that don't need it
+  // This prevents "Browser Restriction" warnings in embedded previews
+  const pathname = request.nextUrl.pathname
+  if (pathname === "/" || pathname.startsWith("/auth/")) {
+    return NextResponse.next()
+  }
+
   return await updateSession(request)
 }
 

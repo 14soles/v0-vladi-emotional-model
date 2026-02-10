@@ -3,7 +3,6 @@
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase/client"
 import { useEffect, useState } from "react"
 
 export default function LandingPage() {
@@ -11,17 +10,26 @@ export default function LandingPage() {
   const [isChecking, setIsChecking] = useState(true)
 
   useEffect(() => {
+    let cancelled = false
     const checkAuth = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (user) {
-        router.push("/app")
-      } else {
-        setIsChecking(false)
+      try {
+        // Dynamic import to avoid loading Supabase at module level,
+        // which triggers the "Browser Restriction" warning in embedded previews
+        const { supabase } = await import("@/lib/supabase/client")
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+        if (!cancelled && user) {
+          router.push("/app")
+          return
+        }
+      } catch {
+        // Auth check failed (e.g. embedded iframe restrictions) - show landing
       }
+      if (!cancelled) setIsChecking(false)
     }
     checkAuth()
+    return () => { cancelled = true }
   }, [router])
 
   if (isChecking) {

@@ -68,6 +68,21 @@ export interface Intervention {
   icon: string
 }
 
+// DEAM EQ v2: Onset & Physical State types
+export type OnsetBucket = "just_now" | "10_30_min" | "30_60_min" | "1_3_hours" | "3_plus_hours"
+
+export const ONSET_TO_MINUTES: Record<OnsetBucket, number> = {
+  just_now: 0,
+  "10_30_min": 20,
+  "30_60_min": 45,
+  "1_3_hours": 120,
+  "3_plus_hours": 240,
+}
+
+export type PhysicalState = "low" | "mid" | "high"
+
+export type PhysicalFlag = "hungry" | "sick"
+
 // DEAM EQ Metrics
 export interface DEAMMetrics {
   granularity: number // G: 0-100

@@ -635,12 +635,12 @@ export function calculateDEAMMetrics(
       climateCounts[e.quadrant as keyof typeof climateCounts]++
     }
   })
-  const total = currentEntries.length || 1
+  const climateTotal = currentEntries.length || 1
   const climate = {
-    green: Math.round((climateCounts.green / total) * 100),
-    yellow: Math.round((climateCounts.yellow / total) * 100),
-    red: Math.round((climateCounts.red / total) * 100),
-    blue: Math.round((climateCounts.blue / total) * 100),
+    green: Math.round((climateCounts.green / climateTotal) * 100),
+    yellow: Math.round((climateCounts.yellow / climateTotal) * 100),
+    red: Math.round((climateCounts.red / climateTotal) * 100),
+    blue: Math.round((climateCounts.blue / climateTotal) * 100),
   }
 
   // Estadísticas de intervenciones

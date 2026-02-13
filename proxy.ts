@@ -2,10 +2,11 @@ import { updateSession } from "@/lib/supabase/proxy"
 import { NextResponse, type NextRequest } from "next/server"
 
 export async function proxy(request: NextRequest) {
-  // Skip auth session check for public routes and API routes that don't need it
-  // This prevents "Browser Restriction" warnings in embedded previews
-  const pathname = request.nextUrl.pathname
-  if (pathname === "/" || pathname.startsWith("/auth/")) {
+  // Skip session refresh only for the landing page to avoid
+  // "Browser Restriction" warnings in embedded v0 previews.
+  // Auth routes still go through updateSession so logged-in
+  // users get redirected away from login/sign-up pages.
+  if (request.nextUrl.pathname === "/") {
     return NextResponse.next()
   }
 

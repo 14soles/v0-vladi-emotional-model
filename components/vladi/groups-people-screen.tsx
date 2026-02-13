@@ -351,7 +351,7 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
       // Update UI to show as pending
       setSearchResults((prev) => prev.map((r) => (r.id === targetUserId ? { ...r, isPending: true } : r)))
     } catch (error) {
-      console.error("[v0] sendFriendRequest: Error caught", error)
+      console.error("[VLADI] sendFriendRequest: Error caught", error)
       handleError(error, "error", {
         userId,
         action: "send_friend_request",
@@ -385,7 +385,7 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
       ).select().single()
 
       if (myContactError) {
-        console.error("[v0] Error creating my contact:", myContactError)
+        console.error("[VLADI] Error creating my contact:", myContactError)
       }
 
       // Get my profile to use as contact name for the requester
@@ -408,7 +408,7 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
       ).select().single()
 
       if (theirContactError) {
-        console.error("[v0] Error creating their contact:", theirContactError)
+        console.error("[VLADI] Error creating their contact:", theirContactError)
       }
 
       // Add to my "Todos" group
@@ -703,7 +703,7 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
               .insert(invitation)
             
             if (insertError) {
-              console.error("[v0] Error inserting invitation:", insertError)
+              console.error("[VLADI] Error inserting invitation:", insertError)
             }
           } else if (existing.status === "rejected") {
             // Re-invite if previously rejected
@@ -713,7 +713,7 @@ export function GroupsPeopleScreen({ onClose, userId }: GroupsPeopleScreenProps)
               .eq("id", existing.id)
             
             if (updateError) {
-              console.error("[v0] Error updating invitation:", updateError)
+              console.error("[VLADI] Error updating invitation:", updateError)
             }
           }
           // If pending or accepted, do nothing

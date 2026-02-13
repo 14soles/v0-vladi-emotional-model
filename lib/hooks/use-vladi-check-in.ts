@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase/client"
 import { useVladiActions } from "@/lib/vladi-store"
 import type { EmotionData } from "./use-emotion-selector"
 
-import type { OnsetBucket, PhysicalState, PhysicalFlag } from "./use-check-in-flow"
+import type { OnsetBucket, PhysicalState, PhysicalFlag } from "@/lib/vladi-types"
 
 export interface CheckInData {
   emotion: EmotionData

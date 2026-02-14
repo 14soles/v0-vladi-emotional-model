@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase/client"
 import { useVladiActions } from "@/lib/vladi-store"
 import type { EmotionData } from "./use-emotion-selector"
 
-import type { OnsetBucket, PhysicalState, PhysicalFlag } from "./use-check-in-flow"
+import type { OnsetBucket, PhysicalState, PhysicalFlag } from "@/lib/vladi-types"
 
 export interface CheckInData {
   emotion: EmotionData
@@ -99,18 +99,20 @@ export function useVladiCheckIn(userId?: string) {
 
         if (error) throw error
 
-        // Check if user has share_location enabled and create emotional ping
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("share_location, location_precision")
-          .eq("id", userId)
-          .single()
+        // Always try to create an emotional ping for the radar
+        // We attempt geolocation on every check-in; if the browser grants it,
+        // the ping is stored so other users can see it on their radar.
+        try {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("location_precision")
+            .eq("id", userId)
+            .single()
 
-        if (profile?.share_location) {
-          const location = await getCurrentLocation(profile.location_precision || "approximate")
+          const precision = profile?.location_precision || "approximate"
+          const location = await getCurrentLocation(precision)
           
           if (location) {
-            // Create emotional ping for radar
             await supabase
               .from("emotional_pings")
               .insert({
@@ -124,6 +126,8 @@ export function useVladiCheckIn(userId?: string) {
                 emotion_entry_id: entry.id,
               })
           }
+        } catch {
+          // Geolocation unavailable or insert failed -- non-blocking
         }
 
         // Update local store with new fields

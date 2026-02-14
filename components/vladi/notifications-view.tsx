@@ -125,7 +125,7 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
         .order("created_at", { ascending: false })
 
       if (requestsError) {
-        console.error("[v0] Error loading friend requests:", requestsError)
+        console.error("[VLADI] Error loading friend requests:", requestsError)
       } else if (mountedRef.current) {
         const transformedRequests = (requests || []).map(r => ({
           ...r,
@@ -150,7 +150,7 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
         .order("created_at", { ascending: false })
 
       if (invitationsError) {
-        console.error("[v0] Error loading group invitations:", invitationsError)
+        console.error("[VLADI] Error loading group invitations:", invitationsError)
       } else if (mountedRef.current) {
         // Fetch inviter profiles separately since foreign key relationship might not exist
         const fromUserIds = (invitations || []).map(i => i.from_user_id)
@@ -187,7 +187,7 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
         .limit(30)
 
       if (acceptancesError) {
-        console.error("[v0] Error loading acceptance notifications:", acceptancesError)
+        console.error("[VLADI] Error loading acceptance notifications:", acceptancesError)
       } else if (mountedRef.current && acceptances && acceptances.length > 0) {
         const fromUserIds = acceptances.map(a => a.from_user_id)
         let profileMap = new Map()
@@ -220,7 +220,7 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
         .limit(50)
 
       if (socialError) {
-        console.error("[v0] Error loading social notifications:", socialError)
+        console.error("[VLADI] Error loading social notifications:", socialError)
       } else if (mountedRef.current && socialData && socialData.length > 0) {
         const fromUserIds = [...new Set(socialData.map(s => s.from_user_id))]
         let profileMap = new Map()
@@ -252,7 +252,7 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
         onNotificationCountChange?.(totalCount)
       }
     } catch (error) {
-      console.error("[v0] Error loading notifications:", error)
+      console.error("[VLADI] Error loading notifications:", error)
     } finally {
       if (mountedRef.current) {
         setLoading(false)
@@ -331,7 +331,7 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
         .single()
 
       if (myContactError) {
-        console.error("[v0] Error creating my contact:", myContactError)
+        console.error("[VLADI] Error creating my contact:", myContactError)
       }
 
       // 3. Create/update contact for the sender (adding me) - IMPORTANT: This ensures the sender sees the accepter in their list
@@ -347,7 +347,7 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
         .single()
 
       if (theirContactError) {
-        console.error("[v0] Error creating their contact:", theirContactError)
+        console.error("[VLADI] Error creating their contact:", theirContactError)
       }
 
       // 4. Add to "Todos" group for current user (me adding the sender)
@@ -404,7 +404,7 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
         return newRequests
       })
     } catch (error) {
-      console.error("[v0] Error accepting friend request:", error)
+      console.error("[VLADI] Error accepting friend request:", error)
     } finally {
       setProcessingId(null)
     }
@@ -426,7 +426,7 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
         return newRequests
       })
     } catch (error) {
-      console.error("[v0] Error rejecting friend request:", error)
+      console.error("[VLADI] Error rejecting friend request:", error)
     } finally {
       setProcessingId(null)
     }
@@ -482,7 +482,7 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
         return newInvitations
       })
     } catch (error) {
-      console.error("[v0] Error accepting group invitation:", error)
+      console.error("[VLADI] Error accepting group invitation:", error)
     } finally {
       setProcessingId(null)
     }
@@ -504,7 +504,7 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
         return newInvitations
       })
     } catch (error) {
-      console.error("[v0] Error rejecting group invitation:", error)
+      console.error("[VLADI] Error rejecting group invitation:", error)
     } finally {
       setProcessingId(null)
     }
@@ -538,7 +538,7 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
         n.id === notificationId ? { ...n, is_read: true } : n
       ))
     } catch (error) {
-      console.error("[v0] Error marking notification as read:", error)
+      console.error("[VLADI] Error marking notification as read:", error)
     }
   }, [])
 
@@ -554,7 +554,7 @@ export function NotificationsView({ onClose, userId, onNotificationCountChange }
         n.id === notificationId ? { ...n, is_read: true } : n
       ))
     } catch (error) {
-      console.error("[v0] Error marking social notification as read:", error)
+      console.error("[VLADI] Error marking social notification as read:", error)
     }
   }, [])
 

@@ -576,8 +576,8 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
                   avatar_url: updatedProfile.avatar_url || undefined,
                 })
               }
-            } catch (error) {
-              console.error("[v0] Error refreshing profile:", error)
+            } catch {
+              // Profile refresh failed silently
             }
           }}
         />

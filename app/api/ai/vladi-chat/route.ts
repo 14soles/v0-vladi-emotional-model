@@ -145,7 +145,7 @@ export async function POST(req: Request) {
 
     return result.toUIMessageStreamResponse()
   } catch (error: any) {
-    console.error("[v0] Error in Vladi chat:", error)
+    console.error("[VLADI] Error in chat:", error)
     return new Response(JSON.stringify({ error: "Error al procesar el chat", details: error.message }), {
       status: 500,
       headers: { "Content-Type": "application/json" },

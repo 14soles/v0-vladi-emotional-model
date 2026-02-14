@@ -30,7 +30,7 @@ Ejemplo: "Dar un paseo de 10 minutos al aire libre"`
 
     return NextResponse.json({ text: text.trim() })
   } catch (error) {
-    console.error("[v0] Error generating activity suggestion:", error)
+    console.error("[VLADI] Error generating activity suggestion:", error)
     return NextResponse.json({ error: "Error al generar sugerencia de actividad" }, { status: 500 })
   }
 }

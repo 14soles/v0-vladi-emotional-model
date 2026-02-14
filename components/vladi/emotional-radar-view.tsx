@@ -277,10 +277,9 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
       setUserLocation(location)
       setHasLocationPermission(true)
       
-      // Save radar_enabled to profile (best effort, don't block)
-      saveSettings({ radar_enabled: true }).catch(err => {
-        console.error("Error saving settings:", err)
-      })
+      // Save radar_enabled + share_location to profile so check-ins create pings
+      saveSettings({ radar_enabled: true, share_location: true }).catch(() => {})
+      setIsSharing(true)
       setIsRadarActive(true)
       
       // Fetch nearby pings

@@ -39,7 +39,7 @@ No uses emojis. Sé breve y directo.`,
 
     return Response.json({ insight: text.trim() })
   } catch (error) {
-    console.error("[v0] Error generating context insights:", error)
+    console.error("[VLADI] Error generating context insights:", error)
     return Response.json(
       {
         insight: "Estos factores aparecen con más frecuencia cuando sube tu intensidad o aumenta tu inercia.",

@@ -34,7 +34,7 @@ No uses frases genéricas. Sé específico basándote en los datos proporcionado
 
     return NextResponse.json({ text })
   } catch (error) {
-    console.error("[v0] Error generating emotional mirror:", error)
+    console.error("[VLADI] Error generating emotional mirror:", error)
     return NextResponse.json({ error: "Error al generar el espejo emocional" }, { status: 500 })
   }
 }

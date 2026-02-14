@@ -22,6 +22,7 @@ import { useVladiStore, type MoodEntry } from "@/lib/vladi-store"
 import type { QuadrantId } from "@/lib/vladi-data"
 import { supabase } from "@/lib/supabase/client"
 import { IEQPanel } from "./ieq-panel"
+import { LocationPermissionPrompt } from "./location-permission-prompt"
 import { handleError } from "@/lib/error-handler"
 
 interface VladiAppProps {
@@ -64,6 +65,7 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
   const { addEntry } = useVladiStore()
 
   const userName = userProfile?.display_name || userProfile?.username || "Usuario"
+  const [showLocationPrompt, setShowLocationPrompt] = useState(true)
 
   const handleNotificationsClick = useCallback(() => {
     setCurrentScreen("notifications")
@@ -549,6 +551,13 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
           onClose={handleCloseVladiChat}
           emotionalContext={vladiChatContext || undefined}
           conversationSummary={conversationSummary}
+        />
+      )}
+
+      {showLocationPrompt && currentScreen === "main" && (
+        <LocationPermissionPrompt
+          userId={userId}
+          onDismiss={() => setShowLocationPrompt(false)}
         />
       )}
 

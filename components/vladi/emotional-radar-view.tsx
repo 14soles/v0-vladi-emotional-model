@@ -106,8 +106,10 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
   const [pings, setPings] = useState<EmotionPing[]>([])
   const [error, setError] = useState<string | null>(null)
 
-  // Load user radar settings from profile
+  // Load user radar settings and auto-activate if previously enabled
   useEffect(() => {
+    let cancelled = false
+
     async function loadSettings() {
       if (!userId) return
       
@@ -118,17 +120,44 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
           .eq("id", userId)
           .single()
         
-        if (data) {
-          // Only load preferences, don't auto-activate radar
-          // (radar_enabled just remembers preference for next time)
-          setIsSharing(data.share_location || false)
-          setLocationPrecision(data.location_precision || "approximate")
+        if (cancelled || !data) return
+
+        setIsSharing(data.share_location || false)
+        setLocationPrecision(data.location_precision || "approximate")
+
+        // Auto-activate radar if user previously enabled it and granted location
+        if (data.radar_enabled && data.share_location) {
+          setHasLocationPermission(true) // Assume permission still granted
+          // Try to get location and auto-activate
+          if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+              (position) => {
+                if (cancelled) return
+                let { latitude, longitude, accuracy } = position.coords
+                if ((data.location_precision || "approximate") === "approximate") {
+                  latitude = Math.round(latitude * 100) / 100
+                  longitude = Math.round(longitude * 100) / 100
+                }
+                const loc = { latitude, longitude, accuracy }
+                setUserLocation(loc)
+                setIsRadarActive(true)
+                fetchNearbyPings(loc)
+              },
+              () => {
+                if (!cancelled) setHasLocationPermission(null)
+              },
+              { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+            )
+          }
         }
-      } catch (err) {
-        console.error("Error loading radar settings:", err)
+      } catch {
+        // Settings load failed -- user can still activate manually
       }
     }
     loadSettings()
+
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId])
 
   // Save settings to profile when changed
@@ -308,10 +337,11 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
     setHasLocationPermission(false)
   }, [])
 
-  // Handle sharing toggle
+  // Handle sharing toggle -- also updates radar_enabled so check-ins
+  // know whether to create pings
   const handleSharingChange = useCallback(async (enabled: boolean) => {
     setIsSharing(enabled)
-    await saveSettings({ share_location: enabled })
+    await saveSettings({ share_location: enabled, radar_enabled: enabled })
   }, [saveSettings])
 
   // Handle precision change
@@ -464,7 +494,7 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
 
                 {/* Privacy note */}
                 <p className="text-xs text-gray-400 text-center">
-                  No mostramos tu identidad ni tu ubicacion exacta. Los datos expiran en 15 minutos.
+                  No mostramos tu identidad ni tu ubicacion exacta. Los datos expiran en 2 horas.
                 </p>
               </div>
             </SheetContent>
@@ -725,7 +755,7 @@ export function EmotionalRadarView({ onClose, userId }: EmotionalRadarViewProps)
         <div className="px-4 pb-safe mb-4">
           <Card className="bg-gray-50 border-gray-200 p-4 text-center">
             <p className="text-gray-500 text-sm">
-              No hay registros emocionales cercanos en los ultimos 15 minutos.
+              No hay registros emocionales cercanos en las ultimas 2 horas.
               {!isSharing && " Activa 'Compartir mi estado' para contribuir al radar."}
             </p>
           </Card>

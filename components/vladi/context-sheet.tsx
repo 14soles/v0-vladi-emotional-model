@@ -54,18 +54,23 @@ export function ContextSheet({ emotionData, onClose, onPublish, userId }: Contex
 
   const { activities, company, addActivity, addCompany } = useVladiStore()
 
-  // Handle keyboard visibility for better UX
+  // Track visual viewport offset so the sheet stays above the keyboard
+  const [vpOffset, setVpOffset] = useState(0)
+
   useEffect(() => {
-    const handleResize = () => {
-      if (typeof window !== 'undefined' && window.visualViewport) {
-        const isKeyboard = window.visualViewport.height < window.innerHeight * 0.75
-        setKeyboardVisible(isKeyboard)
-      }
+    const vv = typeof window !== "undefined" ? window.visualViewport : null
+    if (!vv) return
+
+    const sync = () => {
+      // offsetTop = how far the viewport has been pushed down by the keyboard
+      setVpOffset(window.innerHeight - vv.height)
+      setKeyboardVisible(vv.height < window.innerHeight * 0.75)
     }
-    
-    if (typeof window !== 'undefined' && window.visualViewport) {
-      window.visualViewport.addEventListener('resize', handleResize)
-      return () => window.visualViewport?.removeEventListener('resize', handleResize)
+    vv.addEventListener("resize", sync)
+    vv.addEventListener("scroll", sync)
+    return () => {
+      vv.removeEventListener("resize", sync)
+      vv.removeEventListener("scroll", sync)
     }
   }, [])
 
@@ -128,23 +133,24 @@ export function ContextSheet({ emotionData, onClose, onPublish, userId }: Contex
     <>
       <div className="fixed inset-0 bg-black/30 z-[100] transition-opacity" onClick={onClose} />
 
-      {/* Sheet - Better mobile height handling with keyboard support */}
+      {/* Sheet - compact, grows with content, keyboard-aware */}
       <div
         ref={sheetRef}
-        className="fixed inset-x-0 bottom-0 z-[101] animate-in slide-in-from-bottom duration-500 transition-all"
-        style={{ 
-          height: keyboardVisible ? "100dvh" : "75dvh",
-          maxHeight: keyboardVisible ? "none" : "650px",
+        className="fixed inset-x-0 z-[101] animate-in slide-in-from-bottom duration-500"
+        style={{
+          bottom: vpOffset > 0 ? `${vpOffset}px` : "0px",
+          maxHeight: keyboardVisible ? `calc(100dvh - ${vpOffset}px)` : "70dvh",
+          transition: "bottom 0.15s ease-out, max-height 0.15s ease-out",
         }}
       >
-        <div className="bg-white w-full h-full rounded-t-[40px] px-6 sm:px-10 py-6 sm:py-8 flex flex-col items-center shadow-[0_-10px_40px_rgba(0,0,0,0.2)] overflow-y-auto">
+        <div className="bg-white w-full rounded-t-[32px] px-6 sm:px-10 pt-4 pb-6 sm:pb-8 flex flex-col items-center shadow-[0_-10px_40px_rgba(0,0,0,0.15)] overflow-y-auto max-h-[inherit]">
           {/* Handle */}
-          <div className="w-16 h-1 bg-gray-300 rounded-full mb-4 sm:mb-6 opacity-50 shrink-0" />
+          <div className="w-12 h-1 bg-gray-300 rounded-full mb-3 opacity-50 shrink-0" />
 
           {/* Header */}
-          <div className="text-center w-full mb-2 shrink-0">
-            <p className="text-gray-400 text-xs sm:text-sm font-light mb-2">{dateStr}</p>
-            <div className="flex items-center justify-center gap-2 mb-3 sm:mb-4">
+          <div className="text-center w-full mb-1 shrink-0">
+            <p className="text-gray-400 text-xs font-light mb-1">{dateStr}</p>
+            <div className="flex items-center justify-center gap-2 mb-2">
               <span className="text-gray-500 font-light text-base sm:text-lg">Te sientes</span>
               <span
                 className="w-3 h-3 rounded-full shrink-0"
@@ -207,37 +213,37 @@ export function ContextSheet({ emotionData, onClose, onPublish, userId }: Contex
             </div>
           )}
 
-          {/* Input area - Improved keyboard handling */}
-          <div className="w-full flex-1 flex flex-col justify-center relative mt-2 mb-4 min-h-[120px]">
+          {/* Input area - compact, auto-grows, no scroll jump */}
+          <div className="w-full relative mt-2 mb-4">
             <textarea
               ref={inputRef}
               value={text}
-              onChange={(e) => setText(e.target.value)}
-              onFocus={(e) => {
-                setShowPlaceholder(false)
-                // Scroll into view when focused to ensure visibility with keyboard
-                setTimeout(() => {
-                  e.target.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                }, 100)
+              onChange={(e) => {
+                setText(e.target.value)
+                // Auto-grow: reset height then set to scrollHeight
+                e.target.style.height = "auto"
+                e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`
               }}
+              onFocus={() => setShowPlaceholder(false)}
               onBlur={() => !text && setShowPlaceholder(true)}
-              className="w-full min-h-[100px] border-none outline-none font-sans font-light text-2xl sm:text-3xl text-gray-900 text-center resize-none bg-transparent leading-relaxed relative z-10 p-2"
-              style={{ caretColor: "#111" }}
+              rows={1}
+              className="w-full border-none outline-none font-sans font-light text-xl sm:text-2xl text-gray-900 text-center resize-none bg-transparent leading-relaxed relative z-10 py-3 px-2"
+              style={{ caretColor: "#111", minHeight: "48px", maxHeight: "200px", overflow: "auto" }}
               placeholder=""
             />
             {showPlaceholder && !text && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[5]">
-                <span className="font-light text-2xl sm:text-3xl text-gray-400 whitespace-pre">{typedPlaceholder}</span>
+                <span className="font-light text-xl sm:text-2xl text-gray-400 whitespace-pre">{typedPlaceholder}</span>
                 <span className="blinking-cursor" />
               </div>
             )}
           </div>
 
-          {/* Publish button - sticky at bottom */}
+          {/* Publish button */}
           <button
             onClick={handlePublish}
-            className="w-full bg-gray-900 text-white rounded-full py-4 sm:py-5 text-base sm:text-lg font-normal flex items-center justify-center shadow-[0_10px_25px_rgba(0,0,0,0.15)] active:scale-[0.98] transition-transform shrink-0 touch-manipulation mt-auto"
-            style={{ paddingBottom: "max(16px, env(safe-area-inset-bottom))" }}
+            className="w-full bg-gray-900 text-white rounded-full py-3.5 sm:py-4 text-base font-normal flex items-center justify-center shadow-[0_10px_25px_rgba(0,0,0,0.15)] active:scale-[0.98] transition-transform shrink-0 touch-manipulation"
+            style={{ paddingBottom: keyboardVisible ? "14px" : "max(14px, env(safe-area-inset-bottom))" }}
           >
             Guardar
           </button>

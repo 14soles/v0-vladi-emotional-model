@@ -99,32 +99,35 @@ export function useVladiCheckIn(userId?: string) {
 
         if (error) throw error
 
-        // Always try to create an emotional ping for the radar
-        // We attempt geolocation on every check-in; if the browser grants it,
-        // the ping is stored so other users can see it on their radar.
+        // Create an emotional ping for the radar if the user has opted in.
+        // We check their profile setting first -- only attempt geolocation
+        // when `share_location` is true so we don't fire a browser
+        // permission prompt during the check-in flow.
         try {
           const { data: profile } = await supabase
             .from("profiles")
-            .select("location_precision")
+            .select("share_location, location_precision")
             .eq("id", userId)
             .single()
 
-          const precision = profile?.location_precision || "approximate"
-          const location = await getCurrentLocation(precision)
-          
-          if (location) {
-            await supabase
-              .from("emotional_pings")
-              .insert({
-                user_id: userId,
-                latitude: location.latitude,
-                longitude: location.longitude,
-                accuracy_meters: location.accuracy,
-                emotion: data.emotion.emotion,
-                quadrant: data.emotion.quadrant,
-                intensity: data.intensity,
-                emotion_entry_id: entry.id,
-              })
+          if (profile?.share_location) {
+            const precision = profile.location_precision || "approximate"
+            const location = await getCurrentLocation(precision)
+            
+            if (location) {
+              await supabase
+                .from("emotional_pings")
+                .insert({
+                  user_id: userId,
+                  latitude: location.latitude,
+                  longitude: location.longitude,
+                  accuracy_meters: location.accuracy,
+                  emotion: data.emotion.emotion,
+                  quadrant: data.emotion.quadrant,
+                  intensity: data.intensity,
+                  emotion_entry_id: entry.id,
+                })
+            }
           }
         } catch {
           // Geolocation unavailable or insert failed -- non-blocking

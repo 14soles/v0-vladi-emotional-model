@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { User, MapPin } from "lucide-react"
+import { User } from "lucide-react"
 import { SocialFeed } from "./social-feed"
 import { CommonHeader } from "./common-header"
 import { supabase } from "@/lib/supabase/client"
@@ -96,6 +96,7 @@ export function HomeView({ userId, userProfile, onAvatarClick, onNotificationsCl
             userProfile={userProfile}
             onAvatarClick={onAvatarClick}
             onNotificationsClick={onNotificationsClick}
+            onRadarClick={onRadarClick}
             notificationCount={notificationCount}
           />
         </div>
@@ -158,44 +159,6 @@ export function HomeView({ userId, userProfile, onAvatarClick, onNotificationsCl
               <User className="w-4 h-4" />
             </button>
           </div>
-        </div>
-
-        {/* Radar emocional banner */}
-        <div className="px-4 py-3">
-          <button
-            onClick={onRadarClick}
-            className="relative w-full rounded-2xl overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.12)] active:shadow-[0_1px_6px_rgba(0,0,0,0.06)] transition-shadow"
-          >
-            {/* Map background image */}
-            <div className="absolute inset-0">
-              <img
-                src="/images/radar-map-bg.jpg"
-                alt=""
-                className="w-full h-full object-cover opacity-40"
-                crossOrigin="anonymous"
-              />
-              <div className="absolute inset-0 bg-gradient-to-r from-white/70 via-white/30 to-white/70" />
-            </div>
-
-            {/* Content */}
-            <div className="relative flex items-center justify-between px-5 py-5">
-              {/* Radar icon (concentric circles) */}
-              <div className="flex-shrink-0">
-                <svg className="w-12 h-12 text-gray-800" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <circle cx="24" cy="24" r="20" />
-                  <circle cx="24" cy="24" r="13" />
-                  <circle cx="24" cy="24" r="6" />
-                  <circle cx="24" cy="24" r="2" fill="currentColor" />
-                </svg>
-              </div>
-
-              {/* Location info */}
-              <div className="flex items-center gap-2">
-                <MapPin className="w-5 h-5 text-gray-700" />
-                <span className="text-base text-gray-800 font-medium">30 personas &middot; 10km</span>
-              </div>
-            </div>
-          </button>
         </div>
 
         <SocialFeed userId={userId} filterGroupId={selectedGroup} />

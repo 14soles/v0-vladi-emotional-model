@@ -118,8 +118,10 @@ export function HomeView({ userId, userProfile, onAvatarClick, onNotificationsCl
 
             <button
               onClick={() => setSelectedGroup("todos")}
-              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
-                selectedGroup === "todos" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 border ${
+                selectedGroup === "todos"
+                  ? "bg-gray-900 text-white border-gray-900"
+                  : "bg-white text-gray-900 border-gray-900 hover:bg-gray-50"
               }`}
             >
               Todos
@@ -127,8 +129,10 @@ export function HomeView({ userId, userProfile, onAvatarClick, onNotificationsCl
 
             <button
               onClick={() => setSelectedGroup("solo_yo")}
-              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
-                selectedGroup === "solo_yo" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 border ${
+                selectedGroup === "solo_yo"
+                  ? "bg-gray-900 text-white border-gray-900"
+                  : "bg-white text-gray-900 border-gray-900 hover:bg-gray-50"
               }`}
             >
               Solo yo
@@ -138,8 +142,10 @@ export function HomeView({ userId, userProfile, onAvatarClick, onNotificationsCl
               <button
                 key={group.id}
                 onClick={() => setSelectedGroup(group.id)}
-                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
-                  selectedGroup === group.id ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 border ${
+                  selectedGroup === group.id
+                    ? "bg-gray-900 text-white border-gray-900"
+                    : "bg-white text-gray-900 border-gray-900 hover:bg-gray-50"
                 }`}
               >
                 {group.name}
@@ -152,7 +158,7 @@ export function HomeView({ userId, userProfile, onAvatarClick, onNotificationsCl
                   onPersonasClick()
                 }
               }}
-              className="p-2 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors flex-shrink-0 ml-1"
+              className="p-2 rounded-full bg-white border border-gray-900 text-gray-900 hover:bg-gray-50 transition-colors flex-shrink-0 ml-1"
               aria-label="Configurar grupos"
               type="button"
             >

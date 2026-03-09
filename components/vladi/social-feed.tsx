@@ -508,7 +508,7 @@ export function SocialFeed({ userId, filterGroupId }: SocialFeedProps) {
   return (
     <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
       {entries.map((entry) => (
-        <div key={entry.id} className="bg-gray-100 rounded-2xl px-4 py-4">
+        <div key={entry.id} className="rounded-2xl px-4 py-4" style={{ backgroundColor: "#F6F6F6" }}>
           {/* Header */}
           <div className="flex items-start justify-between mb-2">
             <div className="flex items-center gap-3">

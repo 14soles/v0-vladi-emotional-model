@@ -284,6 +284,7 @@ export function StatsView({ userId, userProfile, onAvatarClick, onNotificationsC
     <div className="flex-1 overflow-y-auto pb-24 bg-gray-50 min-h-0">
       <div className="bg-white">
         <CommonHeader
+          title="Emociones"
           userProfile={userProfile}
           onAvatarClick={onAvatarClick}
           onNotificationsClick={onNotificationsClick}

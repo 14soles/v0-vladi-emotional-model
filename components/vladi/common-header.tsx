@@ -14,12 +14,13 @@ interface CommonHeaderProps {
   filterValue?: string
   onFilterChange?: (value: string) => void
   onRadarClick?: () => void
+  title?: string
 }
 
-export function CommonHeader({ onNotificationsClick, notificationCount = 0, onRadarClick }: CommonHeaderProps) {
+export function CommonHeader({ onNotificationsClick, notificationCount = 0, onRadarClick, title = "Actividad" }: CommonHeaderProps) {
   return (
     <div className="px-5 pt-[max(16px,env(safe-area-inset-top))] pb-3 flex items-center justify-between">
-      <div className="text-2xl font-semibold text-gray-900 tracking-tight">Actividad</div>
+      <h1 className="text-xl font-bold text-gray-900">{title}</h1>
 
       <div className="flex items-center gap-1">
         {/* Radar icon */}

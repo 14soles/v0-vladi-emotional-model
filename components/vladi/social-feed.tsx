@@ -506,9 +506,9 @@ export function SocialFeed({ userId, filterGroupId }: SocialFeedProps) {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
       {entries.map((entry) => (
-        <div key={entry.id} className="px-5 py-4 border-b border-gray-100">
+        <div key={entry.id} className="rounded-2xl px-4 py-4" style={{ backgroundColor: "#F8F8F8" }}>
           {/* Header */}
           <div className="flex items-start justify-between mb-2">
             <div className="flex items-center gap-3">
@@ -594,11 +594,11 @@ export function SocialFeed({ userId, filterGroupId }: SocialFeedProps) {
               </button>
             </div>
 
-            {/* Intervention button */}
+            {/* Intervention pill */}
             {entry.intervention_used && (
-              <button className="flex items-center gap-2 px-3 py-1.5 bg-gray-900 text-white rounded-full text-xs">
-                <Play className="w-3 h-3 fill-current" />
-                <span>DEAM EQ · {INTERVENTION_NAMES[entry.intervention_used] || "Actividad"}</span>
+              <button className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white rounded-full text-xs font-normal max-w-[160px] truncate">
+                <Play className="w-3 h-3 fill-current flex-shrink-0" />
+                <span className="truncate">DEAM EQ · {INTERVENTION_NAMES[entry.intervention_used] || entry.intervention_used}</span>
               </button>
             )}
           </div>

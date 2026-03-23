@@ -107,19 +107,37 @@ export function IEQPanel({ userId, onStartChat }: IEQPanelProps) {
     period,
   ])
 
-  const getEmotionalStateImage = (category: string) => {
-    const categoryLower = category.toLowerCase()
-    if (categoryLower.includes("calma")) {
-      return "/images/circulo-verde-movimiento.png"
-    } else if (categoryLower.includes("ánimo")) {
-      return "/images/circulo-azul.png"
-    } else if (categoryLower.includes("energía")) {
-      return "/images/circulo-amarillo-movimiento.png"
-    } else if (categoryLower.includes("tensión")) {
-      return "/images/circulo-rojo-movimiento.png"
-    }
-    return "/images/circulo-verde-movimiento.png"
+  const QUADRANT_MAP: Record<string, { label: string; image: string }> = {
+    "en calma":    { label: "En calma",    image: "/images/circulo-verde-movimiento.png" },
+    "sin ánimo":   { label: "Sin animo",  image: "/images/circulo-azul-movimiento.png" },
+    "con energía": { label: "Con energia", image: "/images/circulo-amarillo-movimiento.png" },
+    "en tensión":  { label: "En tension",  image: "/images/circulo-rojo-movimiento.png" },
   }
+
+  // Derive the dominant quadrant even when calculateEmotionalState returns null
+  // (it requires >= 3 entries; this fallback works with 1-2 entries too)
+  const resolvedQuadrant = (() => {
+    if (emotionalState) return emotionalState.category
+
+    if (currentEntries.length > 0) {
+      // Count entries per quadrant and pick the most frequent
+      const counts: Record<string, number> = {}
+      currentEntries.forEach((e) => {
+        const v = e.valence
+        const a = e.arousal
+        let q: string
+        if (a <= 0 && v >= 0) q = "en calma"
+        else if (a <= 0 && v < 0) q = "sin ánimo"
+        else if (a > 0 && v >= 0) q = "con energía"
+        else q = "en tensión"
+        counts[q] = (counts[q] || 0) + 1
+      })
+      return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]
+    }
+    return "en calma"
+  })()
+
+  const quadrantInfo = QUADRANT_MAP[resolvedQuadrant] || QUADRANT_MAP["en calma"]
 
   const cardShadowStyle = {
     boxShadow: "0px 4px 22.3px 0px rgba(0, 0, 0, 0.11)",
@@ -209,23 +227,23 @@ export function IEQPanel({ userId, onStartChat }: IEQPanelProps) {
             <p className="text-xs text-gray-400 italic text-center mb-4 leading-relaxed">
               {loadingInsights
                 ? "Analizando..."
-                : aiInsights?.emotionalState || emotionalState?.description || "Aún no hay suficientes registros."}
+                : aiInsights?.emotionalState
+                  || emotionalState?.description
+                  || (currentEntries.length > 0
+                    ? `${getPeriodLabel() === "Hoy" ? "Hoy" : "En este periodo"}, te has sentido principalmente ${resolvedQuadrant}.`
+                    : "Aun no hay suficientes registros.")}
             </p>
 
             <div className="flex items-center justify-center mb-2">
               <div className="relative w-36 h-36 sm:w-44 sm:h-44">
                 <img
-                  src={
-                    emotionalState
-                      ? getEmotionalStateImage(emotionalState.category)
-                      : "/images/circulo-verde-movimiento.png"
-                  }
-                  alt={emotionalState?.category || "Estado"}
+                  src={quadrantInfo.image}
+                  alt={quadrantInfo.label}
                   className="w-full h-full object-contain"
                 />
                 <div className="absolute inset-0 flex items-center justify-center">
                   <span className="text-2xl font-medium text-white relative z-10 leading-[28px]">
-                    {emotionalState?.category || "En calma"}
+                    {quadrantInfo.label}
                   </span>
                 </div>
               </div>

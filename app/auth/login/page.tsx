@@ -57,9 +57,12 @@ export default function LoginPage() {
       router.push("/app")
       router.refresh()
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Error al iniciar sesión"
+      const message = error instanceof Error ? error.message : "Error al iniciar sesion"
       if (message.includes("Invalid login credentials")) {
         setError("Credenciales incorrectas")
+      } else if (message.includes("Failed to fetch") || message.includes("NetworkError")) {
+        // Network error - often happens in embedded previews or when offline
+        setError("Error de conexion. Por favor, abre la app en una nueva pestaña o verifica tu conexion a internet.")
       } else {
         setError(message)
       }
@@ -87,7 +90,12 @@ export default function LoginPage() {
       })
       if (error) throw error
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "Error con Google")
+      const message = error instanceof Error ? error.message : "Error con Google"
+      if (message.includes("Failed to fetch") || message.includes("NetworkError")) {
+        setError("Error de conexion. Por favor, abre la app en una nueva pestaña.")
+      } else {
+        setError(message)
+      }
       setIsLoading(false)
     }
   }

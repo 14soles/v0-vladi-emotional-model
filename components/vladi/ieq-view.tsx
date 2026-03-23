@@ -164,6 +164,7 @@ export function IEQView({
       {/* Header */}
       <div className="bg-white">
         <CommonHeader
+          title="Tu Panel IEQ"
           userProfile={userProfile}
           onAvatarClick={onAvatarClick}
           onNotificationsClick={onNotificationsClick}

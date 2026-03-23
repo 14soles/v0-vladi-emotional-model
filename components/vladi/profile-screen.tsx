@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import {
   ChevronLeft,
@@ -17,6 +17,8 @@ import {
   Check,
   X,
   Loader2,
+  Camera,
+  Image as ImageIcon,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase/client"
 
@@ -57,6 +59,13 @@ export function ProfileScreen({ userProfile, onClose, onProfileUpdate }: Profile
   const [editPhone, setEditPhone] = useState(userProfile?.phone || "")
   const [isSaving, setIsSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
+  
+  // Avatar upload state
+  const [showAvatarOptions, setShowAvatarOptions] = useState(false)
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
+  const [previewAvatar, setPreviewAvatar] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (userProfile?.id) {
@@ -68,7 +77,59 @@ export function ProfileScreen({ userProfile, onClose, onProfileUpdate }: Profile
     setEditUsername(userProfile?.username || "")
     setEditDisplayName(userProfile?.display_name || "")
     setEditPhone(userProfile?.phone || "")
+    setPreviewAvatar(null) // Reset preview when profile changes
   }, [userProfile])
+
+  const handleAvatarSelect = async (file: File) => {
+    if (!userProfile?.id) return
+    
+    // Show preview immediately
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      setPreviewAvatar(e.target?.result as string)
+    }
+    reader.readAsDataURL(file)
+    
+    setIsUploadingAvatar(true)
+    setShowAvatarOptions(false)
+    setEditError(null)
+    
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("userId", userProfile.id)
+      
+      const response = await fetch("/api/avatar/upload", {
+        method: "POST",
+        body: formData,
+      })
+      
+      const result = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(result.error || "Error al subir la imagen")
+      }
+      
+      // Refresh profile to get updated avatar
+      if (onProfileUpdate) {
+        onProfileUpdate()
+      }
+    } catch (error) {
+      console.error("Avatar upload error:", error)
+      setEditError(error instanceof Error ? error.message : "Error al subir la imagen")
+      setPreviewAvatar(null) // Revert preview on error
+    }
+    setIsUploadingAvatar(false)
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      handleAvatarSelect(file)
+    }
+    // Reset input so the same file can be selected again
+    e.target.value = ""
+  }
 
   const loadFriendRequests = async () => {
     if (!userProfile?.id) return
@@ -283,15 +344,102 @@ export function ProfileScreen({ userProfile, onClose, onProfileUpdate }: Profile
         <div className="flex-1 overflow-auto px-6 py-6">
           {/* Avatar */}
           <div className="flex flex-col items-center mb-8">
-            <div className="w-24 h-24 rounded-full bg-gray-900 text-white flex items-center justify-center text-3xl font-medium overflow-hidden mb-3">
-              {userProfile?.avatar_url ? (
-                <img src={userProfile.avatar_url || "/placeholder.svg"} alt="" className="w-full h-full object-cover" />
+            <button
+              onClick={() => setShowAvatarOptions(true)}
+              disabled={isUploadingAvatar}
+              className="relative w-24 h-24 rounded-full bg-gray-900 text-white flex items-center justify-center text-3xl font-medium overflow-hidden mb-3 group"
+            >
+              {previewAvatar || userProfile?.avatar_url ? (
+                <img 
+                  src={previewAvatar || userProfile?.avatar_url || "/placeholder.svg"} 
+                  alt="" 
+                  className="w-full h-full object-cover" 
+                />
               ) : (
                 editDisplayName?.[0]?.toUpperCase() || editUsername?.[0]?.toUpperCase() || "U"
               )}
-            </div>
-            <button className="text-sm text-blue-600">Cambiar foto</button>
+              {/* Overlay on hover */}
+              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <Camera className="w-8 h-8 text-white" />
+              </div>
+              {/* Loading spinner */}
+              {isUploadingAvatar && (
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                  <Loader2 className="w-8 h-8 text-white animate-spin" />
+                </div>
+              )}
+            </button>
+            <button 
+              onClick={() => setShowAvatarOptions(true)}
+              disabled={isUploadingAvatar}
+              className="text-sm text-blue-600 disabled:opacity-50"
+            >
+              {isUploadingAvatar ? "Subiendo..." : "Cambiar foto"}
+            </button>
+            
+            {/* Hidden file inputs */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="user"
+              onChange={handleFileChange}
+              className="hidden"
+            />
           </div>
+          
+          {/* Avatar options modal */}
+          {showAvatarOptions && (
+            <div className="fixed inset-0 bg-black/50 z-[60] flex items-end justify-center" onClick={() => setShowAvatarOptions(false)}>
+              <div 
+                className="bg-white rounded-t-2xl w-full max-w-md p-6 pb-safe animate-in slide-in-from-bottom duration-300"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-6" />
+                <h3 className="text-lg font-semibold text-gray-900 text-center mb-6">Cambiar foto de perfil</h3>
+                
+                <div className="space-y-3">
+                  <button
+                    onClick={() => {
+                      cameraInputRef.current?.click()
+                    }}
+                    className="w-full flex items-center gap-4 px-4 py-4 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center">
+                      <Camera className="w-5 h-5 text-white" />
+                    </div>
+                    <span className="text-gray-900 font-medium">Hacer una foto</span>
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      fileInputRef.current?.click()
+                    }}
+                    className="w-full flex items-center gap-4 px-4 py-4 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center">
+                      <ImageIcon className="w-5 h-5 text-white" />
+                    </div>
+                    <span className="text-gray-900 font-medium">Elegir de la galeria</span>
+                  </button>
+                </div>
+                
+                <button
+                  onClick={() => setShowAvatarOptions(false)}
+                  className="w-full mt-6 py-3 text-gray-500 font-medium"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Form fields */}
           <div className="space-y-6">
@@ -461,13 +609,19 @@ export function ProfileScreen({ userProfile, onClose, onProfileUpdate }: Profile
 
       {/* Profile info */}
       <div className="flex flex-col items-center py-8 px-6 border-b border-gray-100">
-        <div className="w-24 h-24 rounded-full bg-gray-900 text-white flex items-center justify-center text-3xl font-medium overflow-hidden mb-4">
+        <button
+          onClick={() => setShowEditProfile(true)}
+          className="relative w-24 h-24 rounded-full bg-gray-900 text-white flex items-center justify-center text-3xl font-medium overflow-hidden mb-4 group"
+        >
           {userProfile?.avatar_url ? (
             <img src={userProfile.avatar_url || "/placeholder.svg"} alt="" className="w-full h-full object-cover" />
           ) : (
             userProfile?.username?.[0]?.toUpperCase() || "U"
           )}
-        </div>
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <Camera className="w-6 h-6 text-white" />
+          </div>
+        </button>
         <h2 className="text-xl font-semibold text-gray-900">
           {userProfile?.display_name || userProfile?.username || "Usuario"}
         </h2>

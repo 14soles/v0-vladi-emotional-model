@@ -39,12 +39,7 @@ interface InitialQuizProps {
   onClose: () => void
 }
 
-// Mission labels in Spanish (shown as "MISIÓN — 'Label'")
-const DOMAIN_MISSION_LABELS: Record<string, string> = {
-  recognition: "Ponle nombre",
-  understanding: "Comprende la situación", 
-  management: "Elige tu respuesta",
-}
+
 
 // Shuffle array using Fisher-Yates algorithm
 function shuffleArray<T>(array: T[]): T[] {
@@ -530,15 +525,15 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
 
       {/* Question Content */}
       <div className="flex-1 overflow-y-auto px-6 py-8">
-        {/* Mission label */}
-        <p className="text-xs font-semibold text-muted-foreground text-center tracking-widest uppercase mb-6">
-          MISIÓN — {'"'}{DOMAIN_MISSION_LABELS[currentQuestion.domain] || "Responde"}{'"'}
+        {/* Question counter */}
+        <p className="text-xs font-medium text-muted-foreground text-center tracking-wide mb-6">
+          Pregunta {currentIndex + 1} de {totalQuestions}
         </p>
 
-        {/* Question prompt in quotes */}
+        {/* Question prompt */}
         <div className="mb-8">
           <p className="text-lg text-foreground text-center leading-relaxed">
-            {'"'}{currentQuestion.prompt}{'"'}
+            {currentQuestion.prompt}
           </p>
         </div>
 

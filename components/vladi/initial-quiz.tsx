@@ -40,9 +40,10 @@ const DEMO_QUESTIONS = [
 interface InitialQuizProps {
   userId: string
   onComplete: () => void
+  onClose: () => void
 }
 
-export function InitialQuiz({ userId, onComplete }: InitialQuizProps) {
+export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
   const [stage, setStage] = useState<"intro" | "quiz" | "completing">("intro")
   const [currentIndex, setCurrentIndex] = useState(0)
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null)
@@ -247,28 +248,33 @@ export function InitialQuiz({ userId, onComplete }: InitialQuizProps) {
     // onComplete()
   }
 
+  // Close/exit the quiz intro (without completing)
+  const handleClose = () => {
+    onClose()
+  }
+
   // Intro Screen
   if (stage === "intro") {
     return (
       <div className="flex flex-col h-full bg-white">
-        {/* Header */}
-        <div className="flex items-center gap-2 px-5 py-4">
-          <X className="w-5 h-5 text-[#E6584F]" />
-          <span className="text-lg font-semibold text-gray-900">Vladi</span>
+        {/* Header with X close button */}
+        <div className="flex items-center px-5 py-4">
+          <button 
+            onClick={handleClose}
+            className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
         </div>
 
         {/* Content */}
         <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
-          {/* Badge/Icon */}
+          {/* Level 1 Badge - Explorador Emocional */}
           <div className="mb-6">
             <img
-              src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/icono-escudo-vladi-OlrcJlmGYSKJLq0y9qBVRh6QVdCqYx.png"
-              alt="Evaluación Emocional"
-              className="w-32 h-32 object-contain"
-              onError={(e) => {
-                // Fallback if image doesn't load
-                e.currentTarget.style.display = "none"
-              }}
+              src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/1-9dY9dM01JmyMGtHobbNfbL2wHOkutm.png"
+              alt="Explorador Emocional - Nivel 1"
+              className="w-40 h-40 object-contain"
             />
           </div>
 

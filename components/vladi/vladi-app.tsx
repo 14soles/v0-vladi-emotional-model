@@ -379,6 +379,11 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
     setCurrentScreen("main")
   }, [])
 
+  // Handle closing quiz without completing (just go back)
+  const handleQuizClose = useCallback(() => {
+    setShowInitialQuiz(false)
+  }, [])
+
   const handleCloseProfile = useCallback(async () => {
     setShowProfile(false)
     if (userId) {
@@ -587,7 +592,7 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
 
       {showInitialQuiz && userId && (
         <div className="fixed inset-0 z-[200] bg-white">
-          <InitialQuiz userId={userId} onComplete={handleQuizComplete} />
+          <InitialQuiz userId={userId} onComplete={handleQuizComplete} onClose={handleQuizClose} />
         </div>
       )}
 

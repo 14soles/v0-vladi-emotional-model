@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { X, Play, Check, ChevronLeft, ChevronRight } from "lucide-react"
+import { X, Check } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
 // Types for assessment data
@@ -39,11 +39,11 @@ interface InitialQuizProps {
   onClose: () => void
 }
 
-// Domain labels in Spanish
-const DOMAIN_LABELS: Record<string, string> = {
-  recognition: "RECONOCIMIENTO EMOCIONAL",
-  understanding: "COMPRENSIÓN EMOCIONAL",
-  management: "REGULACIÓN EMOCIONAL",
+// Mission labels in Spanish (shown as "MISIÓN — 'Label'")
+const DOMAIN_MISSION_LABELS: Record<string, string> = {
+  recognition: "Ponle nombre",
+  understanding: "Comprende la situación", 
+  management: "Elige tu respuesta",
 }
 
 // Shuffle array using Fisher-Yates algorithm
@@ -503,44 +503,42 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
 
   return (
     <div className="flex flex-col h-full bg-background">
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-            <span className="text-xs font-bold text-primary">{currentIndex + 1}</span>
-          </div>
-          <span className="text-sm text-muted-foreground">de {totalQuestions}</span>
+      {/* Header - Vladi logo, Timer, Finalizar button */}
+      <div className="flex items-center justify-between px-5 py-4">
+        {/* Vladi Logo */}
+        <div className="flex items-center gap-1.5">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="#FF6B6B"/>
+            <path d="M12 2L8.91 8.26L2 9.27L7 14.14L5.82 21.02L12 17.77V2Z" fill="#4ECDC4"/>
+            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77V2Z" fill="#FFE66D"/>
+            <circle cx="12" cy="12" r="3" fill="#2D3436"/>
+          </svg>
+          <span className="font-semibold text-foreground">Vladi</span>
         </div>
 
+        {/* Timer */}
         <span className="text-sm text-muted-foreground font-mono">{formatTime(elapsedTime)}</span>
 
+        {/* Finalizar button */}
         <button 
           onClick={endQuizEarly} 
           className="text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
-          Salir
+          Finalizar
         </button>
       </div>
 
-      {/* Progress bar */}
-      <div className="h-1 bg-muted">
-        <div 
-          className="h-full bg-primary transition-all duration-300"
-          style={{ width: `${((currentIndex + 1) / totalQuestions) * 100}%` }}
-        />
-      </div>
-
       {/* Question Content */}
-      <div className="flex-1 overflow-y-auto px-5 py-6">
-        {/* Domain label */}
-        <p className="text-xs font-medium text-muted-foreground text-center tracking-wide mb-4">
-          {DOMAIN_LABELS[currentQuestion.domain] || currentQuestion.domain.toUpperCase()}
+      <div className="flex-1 overflow-y-auto px-6 py-8">
+        {/* Mission label */}
+        <p className="text-xs font-semibold text-muted-foreground text-center tracking-widest uppercase mb-6">
+          MISIÓN — {'"'}{DOMAIN_MISSION_LABELS[currentQuestion.domain] || "Responde"}{'"'}
         </p>
 
-        {/* Question prompt */}
-        <div className="mb-6">
+        {/* Question prompt in quotes */}
+        <div className="mb-8">
           <p className="text-lg text-foreground text-center leading-relaxed">
-            {currentQuestion.prompt}
+            {'"'}{currentQuestion.prompt}{'"'}
           </p>
         </div>
 
@@ -564,53 +562,53 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
           </div>
         )}
 
-        {/* Options */}
+        {/* Options - Pill style buttons */}
         <div className="space-y-3">
           {currentQuestion.assessment_options.map((option) => (
             <button
               key={option.id}
               onClick={() => selectOption(option.id)}
-              className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl border-2 transition-all ${
+              className={`w-full flex items-center justify-between px-5 py-4 rounded-full border transition-all ${
                 selectedOptionId === option.id
-                  ? "border-primary bg-primary/5"
-                  : "border-border bg-background hover:border-muted-foreground/30"
+                  ? "border-foreground bg-background"
+                  : "border-border bg-background hover:border-muted-foreground/50"
               }`}
             >
               <span className="text-base text-foreground">{option.label}</span>
               <div
-                className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
                   selectedOptionId === option.id 
-                    ? "border-primary bg-primary" 
-                    : "border-muted-foreground/30"
+                    ? "border-foreground bg-foreground" 
+                    : "border-muted-foreground/30 bg-transparent"
                 }`}
               >
-                {selectedOptionId === option.id && <Check className="w-4 h-4 text-primary-foreground" />}
+                {selectedOptionId === option.id && <Check className="w-3.5 h-3.5 text-background" />}
               </div>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="px-5 pb-8 pt-4 border-t border-border">
-        <div className="flex gap-3">
-          {currentIndex > 0 && (
-            <button
-              onClick={previousQuestion}
-              className="flex-shrink-0 w-12 h-12 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-colors"
-            >
-              <ChevronLeft className="w-5 h-5 text-foreground" />
-            </button>
-          )}
-          
+      {/* Footer - Siguiente button and Volver atrás link */}
+      <div className="px-6 pb-8 pt-4">
+        <button
+          onClick={nextQuestion}
+          disabled={!selectedOptionId}
+          className="w-full py-4 bg-foreground text-background rounded-full text-base font-medium disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all"
+        >
+          Siguiente
+        </button>
+        
+        {currentIndex > 0 ? (
           <button
-            onClick={nextQuestion}
-            disabled={!selectedOptionId}
-            className="flex-1 py-4 bg-foreground text-background rounded-full text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] transition-transform"
+            onClick={previousQuestion}
+            className="w-full py-3 text-sm text-muted-foreground hover:text-foreground transition-colors mt-2"
           >
-            {currentIndex < totalQuestions - 1 ? "Siguiente" : "Finalizar"}
+            Volver atrás
           </button>
-        </div>
+        ) : (
+          <div className="h-10" /> /* Spacer when no back button */
+        )}
       </div>
     </div>
   )

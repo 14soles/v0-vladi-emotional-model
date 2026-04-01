@@ -60,6 +60,89 @@ function timeAgo(dateStr: string): string {
   return `Hace ${diffDays} d`
 }
 
+// Demo groups for testing
+const DEMO_GROUPS = [
+  { id: "demo-familia", name: "Familia" },
+  { id: "demo-amigos", name: "Amigos" },
+  { id: "demo-trabajo", name: "Trabajo" },
+]
+
+// Demo data for testing the UI when no real contacts exist
+const DEMO_PERSONAS: PersonaEntry[] = [
+  {
+    id: "demo-1",
+    user_id: "demo-1",
+    username: "angelaferris",
+    display_name: "Angela Ferris",
+    avatar_url: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=face",
+    emotion: "satisfecha",
+    quadrant: "green",
+    created_at: new Date(Date.now() - 5 * 60000).toISOString(),
+    views_count: 346,
+    comments_count: 12,
+  },
+  {
+    id: "demo-2",
+    user_id: "demo-2",
+    username: "javito0858",
+    display_name: "Javier Lopez",
+    avatar_url: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
+    emotion: "aburrido",
+    quadrant: "blue",
+    created_at: new Date(Date.now() - 60 * 60000).toISOString(),
+    views_count: 13,
+    comments_count: 3,
+  },
+  {
+    id: "demo-3",
+    user_id: "demo-3",
+    username: "sergiomugy",
+    display_name: "Sergio Muguruza",
+    avatar_url: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face",
+    emotion: "tranquilo",
+    quadrant: "green",
+    created_at: new Date(Date.now() - 2 * 3600000).toISOString(),
+    views_count: 50,
+    comments_count: 6,
+  },
+  {
+    id: "demo-4",
+    user_id: "demo-4",
+    username: "nataliaagarcia",
+    display_name: "Natalia Garcia",
+    avatar_url: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face",
+    emotion: "enfadada",
+    quadrant: "red",
+    created_at: new Date(Date.now() - 6 * 3600000).toISOString(),
+    views_count: 25,
+    comments_count: 78,
+  },
+  {
+    id: "demo-5",
+    user_id: "demo-5",
+    username: "sergiowash",
+    display_name: "Sergio Washington",
+    avatar_url: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face",
+    emotion: "triste",
+    quadrant: "blue",
+    created_at: new Date(Date.now() - 12 * 3600000).toISOString(),
+    views_count: 29,
+    comments_count: 33,
+  },
+  {
+    id: "demo-6",
+    user_id: "demo-6",
+    username: "elviraanchel",
+    display_name: "Elvira Anchel",
+    avatar_url: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face",
+    emotion: "preocupada",
+    quadrant: "red",
+    created_at: new Date(Date.now() - 13 * 3600000).toISOString(),
+    views_count: 54,
+    comments_count: 32,
+  },
+]
+
 export function PersonasView({
   userId,
   userProfile,
@@ -88,7 +171,9 @@ export function PersonasView({
         const groupList = data
           .map((item) => item.group)
           .filter((g): g is { id: string; name: string } => g !== null)
-        setGroups(groupList)
+        setGroups(groupList.length > 0 ? groupList : DEMO_GROUPS)
+      } else {
+        setGroups(DEMO_GROUPS)
       }
     }
     loadGroups()
@@ -97,6 +182,8 @@ export function PersonasView({
   // Load personas (contacts with their latest emotion)
   const loadPersonas = useCallback(async () => {
     if (!userId) {
+      // Show demo data when not logged in
+      setPersonas(DEMO_PERSONAS)
       setIsLoading(false)
       return
     }
@@ -206,9 +293,13 @@ export function PersonasView({
         }
       }
 
-      setPersonas(Array.from(latestByUser.values()))
+      const realPersonas = Array.from(latestByUser.values())
+      // Use demo data if no real contacts exist
+      setPersonas(realPersonas.length > 0 ? realPersonas : DEMO_PERSONAS)
     } catch (error) {
       console.error("Error loading personas:", error)
+      // Fallback to demo data on error
+      setPersonas(DEMO_PERSONAS)
     } finally {
       setIsLoading(false)
     }

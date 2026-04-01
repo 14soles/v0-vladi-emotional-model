@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
-import { Search, MoreHorizontal, CheckCheck, MessageCircle, UserPlus, X, Trash2, UserMinus, Send } from "lucide-react"
+import { useState, useEffect, useCallback, useRef } from "react"
+import { Search, MoreHorizontal, CheckCheck, MessageCircle, UserPlus, X, Trash2, UserMinus, Send, Reply } from "lucide-react"
 import { supabase } from "@/lib/supabase/client"
 import { CommonHeader } from "./common-header"
 
@@ -197,6 +197,20 @@ export function PersonasView({
   const [loadingComments, setLoadingComments] = useState(false)
   const [newComment, setNewComment] = useState("")
   const [replyingTo, setReplyingTo] = useState<Comment | null>(null)
+  const [sendingComment, setSendingComment] = useState(false)
+  const commentInputRef = useRef<HTMLInputElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpenId(null)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
 
   // Load user's groups
   useEffect(() => {
@@ -301,11 +315,11 @@ export function PersonasView({
       if (entryIds.length > 0) {
         const { data: viewsData } = await supabase
           .from("emotion_views")
-          .select("emotion_entry_id")
+          .select("entry_id")
           .eq("viewer_id", userId)
-          .in("emotion_entry_id", entryIds)
+          .in("entry_id", entryIds)
         
-        viewedEntries = new Set(viewsData?.map((v) => v.emotion_entry_id) || [])
+        viewedEntries = new Set(viewsData?.map((v) => v.entry_id) || [])
       }
 
       // Group by user and take latest
@@ -336,13 +350,13 @@ export function PersonasView({
       if (uniqueEntryIds.length > 0) {
         const { data: commentsData } = await supabase
           .from("emotion_comments")
-          .select("emotion_entry_id")
-          .in("emotion_entry_id", uniqueEntryIds)
+          .select("entry_id")
+          .in("entry_id", uniqueEntryIds)
 
         if (commentsData) {
           const commentCounts = new Map<string, number>()
           commentsData.forEach((c) => {
-            commentCounts.set(c.emotion_entry_id, (commentCounts.get(c.emotion_entry_id) || 0) + 1)
+            commentCounts.set(c.entry_id, (commentCounts.get(c.entry_id) || 0) + 1)
           })
           latestByUser.forEach((persona) => {
             persona.comments_count = commentCounts.get(persona.id) || 0
@@ -370,27 +384,43 @@ export function PersonasView({
   const toggleView = async (entryId: string, hasViewed: boolean) => {
     if (!userId) return
 
+    // Optimistic update
+    setPersonas((prev) =>
+      prev.map((p) =>
+        p.id === entryId
+          ? {
+              ...p,
+              has_viewed: !hasViewed,
+              is_read: !hasViewed || p.is_read,
+              views_count: hasViewed ? Math.max(0, p.views_count - 1) : p.views_count + 1,
+            }
+          : p
+      )
+    )
+
     try {
       if (hasViewed) {
-        await supabase.from("emotion_views").delete().eq("emotion_entry_id", entryId).eq("viewer_id", userId)
-        setPersonas((prev) =>
-          prev.map((p) =>
-            p.id === entryId
-              ? { ...p, has_viewed: false, is_read: false, views_count: Math.max(0, p.views_count - 1) }
-              : p
-          )
-        )
+        await supabase.from("emotion_views").delete().eq("entry_id", entryId).eq("viewer_id", userId)
       } else {
-        await supabase.from("emotion_views").insert({ emotion_entry_id: entryId, viewer_id: userId })
-        await supabase.from("emotion_entries").update({ views_count: supabase.rpc("increment") }).eq("id", entryId)
-        setPersonas((prev) =>
-          prev.map((p) =>
-            p.id === entryId ? { ...p, has_viewed: true, is_read: true, views_count: p.views_count + 1 } : p
-          )
+        await supabase.from("emotion_views").upsert(
+          { entry_id: entryId, viewer_id: userId },
+          { onConflict: "entry_id,viewer_id" }
         )
       }
     } catch (error) {
       console.error("Error toggling view:", error)
+      // Revert optimistic update on error
+      setPersonas((prev) =>
+        prev.map((p) =>
+          p.id === entryId
+            ? {
+                ...p,
+                has_viewed: hasViewed,
+                views_count: hasViewed ? p.views_count + 1 : Math.max(0, p.views_count - 1),
+              }
+            : p
+        )
+      )
     }
   }
 
@@ -398,12 +428,16 @@ export function PersonasView({
   const markAsRead = async (persona: PersonaEntry) => {
     if (!userId || persona.is_read || persona.has_viewed) return
     
+    setPersonas((prev) =>
+      prev.map((p) =>
+        p.id === persona.id ? { ...p, is_read: true, has_viewed: true, views_count: p.views_count + 1 } : p
+      )
+    )
+    
     try {
-      await supabase.from("emotion_views").insert({ emotion_entry_id: persona.id, viewer_id: userId })
-      setPersonas((prev) =>
-        prev.map((p) =>
-          p.id === persona.id ? { ...p, is_read: true, has_viewed: true, views_count: p.views_count + 1 } : p
-        )
+      await supabase.from("emotion_views").upsert(
+        { entry_id: persona.id, viewer_id: userId },
+        { onConflict: "entry_id,viewer_id" }
       )
     } catch (error) {
       console.error("Error marking as read:", error)
@@ -431,6 +465,8 @@ export function PersonasView({
   const openComments = async (entryId: string) => {
     setCommentsModalId(entryId)
     setLoadingComments(true)
+    setReplyingTo(null)
+    setNewComment("")
 
     try {
       const { data } = await supabase
@@ -440,24 +476,32 @@ export function PersonasView({
           content,
           author_id,
           created_at,
-          parent_id,
-          author:profiles!emotion_comments_author_id_fkey(username, avatar_url)
+          parent_comment_id
         `)
-        .eq("emotion_entry_id", entryId)
+        .eq("entry_id", entryId)
         .order("created_at", { ascending: true })
 
-      if (data) {
+      if (data && data.length > 0) {
+        // Get author profiles
+        const authorIds = [...new Set(data.map((c) => c.author_id))]
+        const { data: authorsData } = await supabase
+          .from("profiles")
+          .select("id, username, avatar_url")
+          .in("id", authorIds)
+
+        const authorsMap = new Map(authorsData?.map((a) => [a.id, a]) || [])
+
         const commentsMap = new Map<string, Comment>()
         const rootComments: Comment[] = []
 
         data.forEach((c) => {
-          const author = Array.isArray(c.author) ? c.author[0] : c.author
+          const author = authorsMap.get(c.author_id)
           const comment: Comment = {
             id: c.id,
             content: c.content,
             author_id: c.author_id,
             created_at: c.created_at,
-            parent_id: c.parent_id,
+            parent_id: c.parent_comment_id,
             author: {
               username: author?.username || "Usuario",
               avatar_url: author?.avatar_url || null,
@@ -476,6 +520,8 @@ export function PersonasView({
         })
 
         setComments(rootComments)
+      } else {
+        setComments([])
       }
     } catch (error) {
       console.error("Error loading comments:", error)
@@ -486,40 +532,33 @@ export function PersonasView({
 
   // Submit comment
   const submitComment = async () => {
-    if (!userId || !commentsModalId || !newComment.trim()) return
+    if (!userId || !commentsModalId || !newComment.trim() || sendingComment) return
 
+    setSendingComment(true)
     try {
       const { data, error } = await supabase
         .from("emotion_comments")
         .insert({
-          emotion_entry_id: commentsModalId,
+          entry_id: commentsModalId,
           author_id: userId,
           content: newComment.trim(),
-          parent_id: replyingTo?.id || null,
+          parent_comment_id: replyingTo?.id || null,
         })
-        .select(`
-          id,
-          content,
-          author_id,
-          created_at,
-          parent_id,
-          author:profiles!emotion_comments_author_id_fkey(username, avatar_url)
-        `)
+        .select("id, content, author_id, created_at, parent_comment_id")
         .single()
 
       if (error) throw error
 
       if (data) {
-        const author = Array.isArray(data.author) ? data.author[0] : data.author
         const newCommentObj: Comment = {
           id: data.id,
           content: data.content,
           author_id: data.author_id,
           created_at: data.created_at,
-          parent_id: data.parent_id,
+          parent_id: data.parent_comment_id,
           author: {
-            username: author?.username || "Usuario",
-            avatar_url: author?.avatar_url || null,
+            username: userProfile?.username || "Usuario",
+            avatar_url: userProfile?.avatar_url || null,
           },
           replies: [],
         }
@@ -543,7 +582,22 @@ export function PersonasView({
       setReplyingTo(null)
     } catch (error) {
       console.error("Error submitting comment:", error)
+    } finally {
+      setSendingComment(false)
     }
+  }
+
+  // Start reply to a comment
+  const startReply = (comment: Comment) => {
+    setReplyingTo(comment)
+    setNewComment(`@${comment.author.username} `)
+    commentInputRef.current?.focus()
+  }
+
+  // Cancel reply
+  const cancelReply = () => {
+    setReplyingTo(null)
+    setNewComment("")
   }
 
   // Delete comment
@@ -840,7 +894,7 @@ export function PersonasView({
                         </div>
                         <p className="text-sm text-gray-700 mt-0.5">{comment.content}</p>
                         <button
-                          onClick={() => setReplyingTo(comment)}
+                          onClick={() => startReply(comment)}
                           className="text-xs text-gray-500 hover:text-gray-700 mt-1"
                         >
                           Responder
@@ -884,28 +938,32 @@ export function PersonasView({
             </div>
 
             {/* Comment input */}
-            <div className="px-5 py-4 border-t border-gray-100">
+            <div className="px-5 py-4 border-t border-gray-100 bg-white shrink-0">
               {replyingTo && (
-                <div className="flex items-center justify-between mb-2 text-xs text-gray-500">
-                  <span>Respondiendo a @{replyingTo.author.username}</span>
-                  <button onClick={() => setReplyingTo(null)} className="text-gray-400 hover:text-gray-600">
+                <div className="flex items-center justify-between mb-2 px-2">
+                  <span className="text-xs text-gray-500">
+                    Respondiendo a <span className="font-medium">@{replyingTo.author.username}</span>
+                  </span>
+                  <button onClick={cancelReply} className="text-xs text-gray-400 hover:text-gray-600">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
               )}
-              <div className="flex items-center gap-3">
+              <div className="flex gap-2">
                 <input
+                  ref={commentInputRef}
                   type="text"
-                  placeholder="Escribe un comentario..."
+                  placeholder={replyingTo ? "Escribe una respuesta..." : "Escribe un comentario..."}
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && submitComment()}
-                  className="flex-1 px-4 py-2.5 bg-gray-100 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
+                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && submitComment()}
+                  className="flex-1 px-4 py-2.5 bg-gray-100 rounded-full text-sm outline-none focus:ring-2 focus:ring-gray-200"
+                  autoComplete="off"
                 />
                 <button
                   onClick={submitComment}
-                  disabled={!newComment.trim()}
-                  className="p-2.5 bg-gray-900 text-white rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={!newComment.trim() || sendingComment}
+                  className="p-2.5 bg-gray-900 text-white rounded-full disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
                 >
                   <Send className="w-4 h-4" />
                 </button>

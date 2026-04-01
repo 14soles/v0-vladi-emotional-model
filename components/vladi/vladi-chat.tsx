@@ -193,7 +193,7 @@ export function VladiChat({
             )}
 
             <p className="text-sm text-gray-600">
-              Si quieres acceder a tu historial de conversaciones, puedes hacerlo en Tu Panel IEQ.
+              Si quieres acceder a tu historial de conversaciones, puedes hacerlo en Tu Panel.
             </p>
           </div>
         </div>

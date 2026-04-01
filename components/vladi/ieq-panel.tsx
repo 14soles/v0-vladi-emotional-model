@@ -163,7 +163,7 @@ export function IEQPanel({ userId, onStartChat }: IEQPanelProps) {
         <div className="bg-white px-2 sm:px-4 py-4">
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Tu Panel IEQ</h1>
+              <h1 className="text-xl font-bold text-gray-900">Tu Panel</h1>
               <p className="text-xs text-gray-400 mt-0.5">{formatDateRange()}</p>
             </div>
             <div className="relative">

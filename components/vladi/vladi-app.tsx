@@ -13,6 +13,7 @@ import { ChatsView } from "./chats-view"
 import { PlaceholderView } from "./placeholder-view"
 import { LearnScreen } from "./learn-screen"
 import { HomeView } from "./home-view"
+import { PersonasView } from "./personas-view"
 import { ProfileScreen } from "./profile-screen"
 import { VladiChat } from "./vladi-chat" // Imported VladiChat component
 import { NotificationsView } from "./notifications-view" // Imported NotificationsView component
@@ -38,7 +39,7 @@ interface VladiAppProps {
 }
 
 export default function VladiApp({ userId, userProfile: initialUserProfile }: VladiAppProps) {
-  const [activeTab, setActiveTab] = useState("record")
+  const [activeTab, setActiveTab] = useState("personas")
   const [currentScreen, setCurrentScreen] = useState<
     "main" | "emotion" | "context" | "mirror" | "vladi-chat" | "notifications" | "personas" | "emotional-radar"
   >("main")
@@ -328,21 +329,11 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
   }, [])
 
   const handleTabChange = useCallback((tab: string) => {
-    if (tab === "home") {
-      setCurrentScreen("main")
-    } else if (tab === "stats") {
-      setCurrentScreen("main")
-    } else if (tab === "record") {
-      setCurrentScreen("main")
-    } else if (tab === "perfil") {
+    if (tab === "perfil") {
       setShowProfile(true)
       return // Don't change activeTab, stay on current view
-    } else if (tab === "aprende") {
-      // Placeholder for future "Aprende" section
-      setCurrentScreen("main")
-    } else if (tab === "personas") {
-      setCurrentScreen("personas")
     }
+    setCurrentScreen("main")
     setActiveTab(tab)
   }, [])
 
@@ -435,6 +426,27 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
     }
 
     switch (activeTab) {
+      case "personas":
+        return (
+          <PersonasView
+            userId={userId}
+            userProfile={profileForViews}
+            onAvatarClick={handleOpenProfile}
+            onNotificationsClick={handleNotificationsClick}
+            notificationCount={notificationCount}
+            onPersonasClick={handleOpenGroupsPeople}
+          />
+        )
+      case "vladi":
+        return (
+          <VladiChat
+            userId={userId}
+            userName={userName}
+            onClose={() => setActiveTab("personas")}
+            emotionalContext={vladiChatContext || undefined}
+            conversationSummary={conversationSummary}
+          />
+        )
       case "home":
         return (
           <HomeView
@@ -467,36 +479,15 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
             notificationCount={notificationCount}
           />
         )
-      case "aprende":
-        return (
-          <LearnScreen
-            userId={userId}
-            userProfile={profileForViews}
-            onAvatarClick={handleOpenProfile}
-            onNotificationsClick={handleNotificationsClick}
-          />
-        )
-      case "chats":
-        return (
-          <ChatsView
-            userId={userId}
-            userProfile={profileForViews}
-            onAvatarClick={handleOpenProfile}
-            onNotificationsClick={handleNotificationsClick}
-            notificationCount={notificationCount}
-          />
-        )
-      case "eq":
-        return <PlaceholderView title="EQ" icon="eq" />
       default:
         return (
-          <RecordView
-            onStartCheckIn={handleStartCheckIn}
-            userName={userName}
-            userProfile={userProfile}
+          <PersonasView
+            userId={userId}
+            userProfile={profileForViews}
             onAvatarClick={handleOpenProfile}
             onNotificationsClick={handleNotificationsClick}
             notificationCount={notificationCount}
+            onPersonasClick={handleOpenGroupsPeople}
           />
         )
     }
@@ -506,7 +497,7 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
     <div className="relative h-[100dvh] flex flex-col bg-white overflow-hidden">
       <div className="flex-1 flex flex-col overflow-hidden min-h-0">{renderMainView()}</div>
 
-      {currentScreen === "main" && (
+      {currentScreen === "main" && activeTab !== "vladi" && (
         <BottomNavbar activeTab={activeTab} onTabChange={handleTabChange} userProfile={userProfile} />
       )}
 

@@ -164,7 +164,7 @@ export function IEQView({
       {/* Header */}
       <div className="bg-white">
         <CommonHeader
-          title="Tu Panel IEQ"
+          title="Tu Panel"
           userProfile={userProfile}
           onAvatarClick={onAvatarClick}
           onNotificationsClick={onNotificationsClick}
@@ -176,7 +176,7 @@ export function IEQView({
       <div className="bg-white px-5 pt-4 pb-5 border-b border-gray-200">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Tu Panel IEQ</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Tu Panel</h1>
             <p className="text-sm text-gray-500 mt-1">{formatDate(timeRange)}</p>
           </div>
           <button

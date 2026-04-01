@@ -38,7 +38,7 @@ interface Comment {
   content: string
   author_id: string
   created_at: string
-  parent_id: string | null
+  parent_comment_id: string | null
   author: {
     username: string
     avatar_url: string | null
@@ -196,7 +196,7 @@ export function PersonasView({
   const [comments, setComments] = useState<Comment[]>([])
   const [loadingComments, setLoadingComments] = useState(false)
   const [newComment, setNewComment] = useState("")
-  const [replyingTo, setReplyingTo] = useState<Comment | null>(null)
+  const [replyingTo, setReplyingTo] = useState<{ id: string; username: string } | null>(null)
   const [sendingComment, setSendingComment] = useState(false)
   const [selectedPersona, setSelectedPersona] = useState<PersonaEntry | null>(null)
   const commentInputRef = useRef<HTMLInputElement>(null)
@@ -462,29 +462,27 @@ export function PersonasView({
     }
   }
 
-  // Open comments modal
-  const openComments = async (entryId: string) => {
-    setCommentsModalId(entryId)
+  // Load comments for an entry
+  const loadComments = async (entryId: string) => {
     setLoadingComments(true)
     setReplyingTo(null)
-    setNewComment("")
-
+    
+    // For demo entries, just show empty
+    if (entryId.startsWith("demo-")) {
+      setComments([])
+      setLoadingComments(false)
+      return
+    }
+    
     try {
-      const { data } = await supabase
+      const { data: commentsData } = await supabase
         .from("emotion_comments")
-        .select(`
-          id,
-          content,
-          author_id,
-          created_at,
-          parent_comment_id
-        `)
+        .select("id, content, created_at, author_id, parent_comment_id")
         .eq("entry_id", entryId)
         .order("created_at", { ascending: true })
 
-      if (data && data.length > 0) {
-        // Get author profiles
-        const authorIds = [...new Set(data.map((c) => c.author_id))]
+      if (commentsData && commentsData.length > 0) {
+        const authorIds = [...new Set(commentsData.map((c) => c.author_id))]
         const { data: authorsData } = await supabase
           .from("profiles")
           .select("id, username, avatar_url")
@@ -492,35 +490,39 @@ export function PersonasView({
 
         const authorsMap = new Map(authorsData?.map((a) => [a.id, a]) || [])
 
-        const commentsMap = new Map<string, Comment>()
+        // Separate root comments and replies
         const rootComments: Comment[] = []
+        const repliesMap = new Map<string, Comment[]>()
 
-        data.forEach((c) => {
-          const author = authorsMap.get(c.author_id)
+        commentsData.forEach((c) => {
           const comment: Comment = {
             id: c.id,
             content: c.content,
-            author_id: c.author_id,
             created_at: c.created_at,
-            parent_id: c.parent_comment_id,
+            author_id: c.author_id,
+            parent_comment_id: c.parent_comment_id,
             author: {
-              username: author?.username || "Usuario",
-              avatar_url: author?.avatar_url || null,
+              username: authorsMap.get(c.author_id)?.username || "usuario",
+              avatar_url: authorsMap.get(c.author_id)?.avatar_url || null,
             },
-            replies: [],
           }
-          commentsMap.set(c.id, comment)
-        })
 
-        commentsMap.forEach((comment) => {
-          if (comment.parent_id && commentsMap.has(comment.parent_id)) {
-            commentsMap.get(comment.parent_id)!.replies!.push(comment)
-          } else if (!comment.parent_id) {
+          if (c.parent_comment_id) {
+            const replies = repliesMap.get(c.parent_comment_id) || []
+            replies.push(comment)
+            repliesMap.set(c.parent_comment_id, replies)
+          } else {
             rootComments.push(comment)
           }
         })
 
-        setComments(rootComments)
+        // Attach replies to their parent comments
+        const commentsWithReplies = rootComments.map((c) => ({
+          ...c,
+          replies: repliesMap.get(c.id) || [],
+        }))
+
+        setComments(commentsWithReplies)
       } else {
         setComments([])
       }
@@ -531,25 +533,35 @@ export function PersonasView({
     }
   }
 
+  // Open comments modal
+  const openComments = (entryId: string) => {
+    setCommentsModalId(entryId)
+    setNewComment("")
+    loadComments(entryId)
+  }
+
   // Submit comment
-  const submitComment = async () => {
-    console.log("[v0] submitComment called", { userId, commentsModalId, newComment: newComment.trim(), sendingComment })
+  const sendComment = async () => {
+    console.log("[v0] sendComment called", { 
+      newComment: newComment.trim(), 
+      commentsModalId, 
+      userId,
+      sendingComment 
+    })
     
-    if (!userId || !commentsModalId || !newComment.trim() || sendingComment) {
-      console.log("[v0] submitComment early return - missing data")
+    if (!newComment.trim() || !commentsModalId || !userId) {
+      console.log("[v0] sendComment - early return due to missing data")
       return
     }
     
-    // Check if this is demo data (can't save comments to demo entries)
+    // For demo entries, show locally only
     if (commentsModalId.startsWith("demo-")) {
-      console.log("[v0] Cannot save comments on demo entries")
-      // Still show the comment locally for demo purposes
       const demoComment: Comment = {
         id: `demo-comment-${Date.now()}`,
         content: newComment.trim(),
         author_id: userId,
         created_at: new Date().toISOString(),
-        parent_id: replyingTo?.id || null,
+        parent_comment_id: replyingTo?.id || null,
         author: {
           username: userProfile?.username || "Usuario",
           avatar_url: userProfile?.avatar_url || null,
@@ -577,63 +589,46 @@ export function PersonasView({
     }
 
     setSendingComment(true)
+    console.log("[v0] Sending comment to database:", {
+      entry_id: commentsModalId,
+      author_id: userId,
+      content: newComment.trim(),
+      parent_comment_id: replyingTo?.id || null,
+    })
+    
     try {
-      const insertData = {
-        entry_id: commentsModalId,
-        author_id: userId,
-        content: newComment.trim(),
-        parent_comment_id: replyingTo?.id || null,
-      }
-      console.log("[v0] Inserting comment:", insertData)
-      
       const { data, error } = await supabase
         .from("emotion_comments")
-        .insert(insertData)
-        .select("id, content, author_id, created_at, parent_comment_id")
+        .insert({
+          entry_id: commentsModalId,
+          author_id: userId,
+          content: newComment.trim(),
+          parent_comment_id: replyingTo?.id || null,
+        })
+        .select()
         .single()
 
       console.log("[v0] Insert result:", { data, error })
       
       if (error) throw error
 
-      if (data) {
-        const newCommentObj: Comment = {
-          id: data.id,
-          content: data.content,
-          author_id: data.author_id,
-          created_at: data.created_at,
-          parent_id: data.parent_comment_id,
-          author: {
-            username: userProfile?.username || "Usuario",
-            avatar_url: userProfile?.avatar_url || null,
-          },
-          replies: [],
-        }
+      // Reload comments to get fresh data
+      await loadComments(commentsModalId)
 
-        if (replyingTo) {
-          setComments((prev) =>
-            prev.map((c) =>
-              c.id === replyingTo.id ? { ...c, replies: [...(c.replies || []), newCommentObj] } : c
-            )
-          )
-        } else {
-          setComments((prev) => [...prev, newCommentObj])
-        }
-
-        setPersonas((prev) =>
-          prev.map((p) => (p.id === commentsModalId ? { ...p, comments_count: p.comments_count + 1 } : p))
-        )
-        
-        // Update selectedPersona count
-        if (selectedPersona && selectedPersona.id === commentsModalId) {
-          setSelectedPersona({ ...selectedPersona, comments_count: selectedPersona.comments_count + 1 })
-        }
+      // Update comment count in personas
+      setPersonas((prev) =>
+        prev.map((p) => (p.id === commentsModalId ? { ...p, comments_count: p.comments_count + 1 } : p))
+      )
+      
+      // Update selectedPersona count
+      if (selectedPersona && selectedPersona.id === commentsModalId) {
+        setSelectedPersona((prev) => prev ? { ...prev, comments_count: prev.comments_count + 1 } : null)
       }
 
       setNewComment("")
       setReplyingTo(null)
     } catch (error) {
-      console.error("[v0] Error submitting comment:", error)
+      console.error("Error sending comment:", error)
     } finally {
       setSendingComment(false)
     }
@@ -641,7 +636,7 @@ export function PersonasView({
 
   // Start reply to a comment
   const startReply = (comment: Comment) => {
-    setReplyingTo(comment)
+    setReplyingTo({ id: comment.id, username: comment.author.username })
     setNewComment(`@${comment.author.username} `)
     commentInputRef.current?.focus()
   }
@@ -1053,7 +1048,7 @@ export function PersonasView({
               {replyingTo && (
                 <div className="flex items-center justify-between mb-2 px-2">
                   <span className="text-xs text-gray-500">
-                    Respondiendo a <span className="font-medium">@{replyingTo.author.username}</span>
+                    Respondiendo a <span className="font-medium">@{replyingTo.username}</span>
                   </span>
                   <button onClick={cancelReply} className="text-xs text-gray-400 hover:text-gray-600">
                     <X className="w-4 h-4" />
@@ -1067,12 +1062,12 @@ export function PersonasView({
                   placeholder={replyingTo ? "Escribe una respuesta..." : "Escribe un comentario..."}
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && submitComment()}
+                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendComment()}
                   className="flex-1 px-4 py-2.5 bg-gray-100 rounded-full text-sm outline-none focus:ring-2 focus:ring-gray-200"
                   autoComplete="off"
                 />
                 <button
-                  onClick={submitComment}
+                  onClick={sendComment}
                   disabled={!newComment.trim() || sendingComment}
                   className="p-2.5 bg-gray-900 text-white rounded-full disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
                 >

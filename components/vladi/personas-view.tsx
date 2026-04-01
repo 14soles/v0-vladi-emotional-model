@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Search, MoreHorizontal, CheckCheck, MessageCircle, UserPlus } from "lucide-react"
+import { Search, MoreHorizontal, CheckCheck, MessageCircle, UserPlus, X, Trash2, UserMinus, Send } from "lucide-react"
 import { supabase } from "@/lib/supabase/client"
 import { CommonHeader } from "./common-header"
 
@@ -29,13 +29,29 @@ interface PersonaEntry {
   created_at: string
   views_count: number
   comments_count: number
+  has_viewed?: boolean
+  is_read?: boolean
 }
 
-const QUADRANT_BORDER_COLORS: Record<string, string> = {
-  green: "#94B22E",
-  yellow: "#E6B04F",
-  red: "#E6584F",
-  blue: "#466D91",
+interface Comment {
+  id: string
+  content: string
+  author_id: string
+  created_at: string
+  parent_id: string | null
+  author: {
+    username: string
+    avatar_url: string | null
+  }
+  replies?: Comment[]
+}
+
+// Gradient colors for unread entries (based on quadrant)
+const QUADRANT_GRADIENTS: Record<string, string> = {
+  green: "linear-gradient(180deg, #94B22E 0%, #C4D88E 100%)",
+  yellow: "linear-gradient(180deg, #E6B04F 0%, #F5D89A 100%)",
+  red: "linear-gradient(180deg, #E6584F 0%, #F5A39D 100%)",
+  blue: "linear-gradient(180deg, #466D91 0%, #8FAFC9 100%)",
 }
 
 const QUADRANT_DOT_COLORS: Record<string, string> = {
@@ -60,6 +76,19 @@ function timeAgo(dateStr: string): string {
   return `Hace ${diffDays} d`
 }
 
+function formatTimeAgo(dateStr: string): string {
+  const now = new Date()
+  const date = new Date(dateStr)
+  const diffMs = now.getTime() - date.getTime()
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return "ahora"
+  if (diffMin < 60) return `${diffMin}m`
+  const diffHours = Math.floor(diffMs / 3600000)
+  if (diffHours < 24) return `${diffHours}h`
+  const diffDays = Math.floor(diffMs / 86400000)
+  return `${diffDays}d`
+}
+
 // Demo groups for testing
 const DEMO_GROUPS = [
   { id: "demo-familia", name: "Familia" },
@@ -80,6 +109,7 @@ const DEMO_PERSONAS: PersonaEntry[] = [
     created_at: new Date(Date.now() - 5 * 60000).toISOString(),
     views_count: 346,
     comments_count: 12,
+    is_read: false,
   },
   {
     id: "demo-2",
@@ -92,6 +122,7 @@ const DEMO_PERSONAS: PersonaEntry[] = [
     created_at: new Date(Date.now() - 60 * 60000).toISOString(),
     views_count: 13,
     comments_count: 3,
+    is_read: false,
   },
   {
     id: "demo-3",
@@ -104,6 +135,7 @@ const DEMO_PERSONAS: PersonaEntry[] = [
     created_at: new Date(Date.now() - 2 * 3600000).toISOString(),
     views_count: 50,
     comments_count: 6,
+    is_read: false,
   },
   {
     id: "demo-4",
@@ -116,6 +148,7 @@ const DEMO_PERSONAS: PersonaEntry[] = [
     created_at: new Date(Date.now() - 6 * 3600000).toISOString(),
     views_count: 25,
     comments_count: 78,
+    is_read: false,
   },
   {
     id: "demo-5",
@@ -128,6 +161,7 @@ const DEMO_PERSONAS: PersonaEntry[] = [
     created_at: new Date(Date.now() - 12 * 3600000).toISOString(),
     views_count: 29,
     comments_count: 33,
+    is_read: true,
   },
   {
     id: "demo-6",
@@ -140,6 +174,7 @@ const DEMO_PERSONAS: PersonaEntry[] = [
     created_at: new Date(Date.now() - 13 * 3600000).toISOString(),
     views_count: 54,
     comments_count: 32,
+    is_read: true,
   },
 ]
 
@@ -156,10 +191,19 @@ export function PersonasView({
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedFilter, setSelectedFilter] = useState("todos")
   const [groups, setGroups] = useState<{ id: string; name: string }[]>([])
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
+  const [commentsModalId, setCommentsModalId] = useState<string | null>(null)
+  const [comments, setComments] = useState<Comment[]>([])
+  const [loadingComments, setLoadingComments] = useState(false)
+  const [newComment, setNewComment] = useState("")
+  const [replyingTo, setReplyingTo] = useState<Comment | null>(null)
 
   // Load user's groups
   useEffect(() => {
-    if (!userId) return
+    if (!userId) {
+      setGroups(DEMO_GROUPS)
+      return
+    }
 
     const loadGroups = async () => {
       const { data } = await supabase
@@ -182,7 +226,6 @@ export function PersonasView({
   // Load personas (contacts with their latest emotion)
   const loadPersonas = useCallback(async () => {
     if (!userId) {
-      // Show demo data when not logged in
       setPersonas(DEMO_PERSONAS)
       setIsLoading(false)
       return
@@ -214,7 +257,6 @@ export function PersonasView({
 
         if (groupMembers) {
           const groupMemberIds = new Set(groupMembers.map((m) => m.user_id))
-          // Intersect with contacts
           for (const id of contactIds) {
             if (!groupMemberIds.has(id)) {
               contactIds.delete(id)
@@ -229,7 +271,6 @@ export function PersonasView({
       }
 
       if (contactIds.size === 0) {
-        // Show demo data when no contacts
         setPersonas(DEMO_PERSONAS)
         setIsLoading(false)
         return
@@ -254,6 +295,19 @@ export function PersonasView({
         .in("user_id", Array.from(contactIds))
         .order("created_at", { ascending: false })
 
+      // Check which entries the user has viewed
+      const entryIds = entriesData?.map((e) => e.id) || []
+      let viewedEntries = new Set<string>()
+      if (entryIds.length > 0) {
+        const { data: viewsData } = await supabase
+          .from("emotion_views")
+          .select("emotion_entry_id")
+          .eq("viewer_id", userId)
+          .in("emotion_entry_id", entryIds)
+        
+        viewedEntries = new Set(viewsData?.map((v) => v.emotion_entry_id) || [])
+      }
+
       // Group by user and take latest
       const latestByUser = new Map<string, PersonaEntry>()
       
@@ -270,18 +324,20 @@ export function PersonasView({
             quadrant: entry.quadrant,
             created_at: entry.created_at,
             views_count: entry.views_count || 0,
-            comments_count: 0, // Will be loaded separately if needed
+            comments_count: 0,
+            has_viewed: viewedEntries.has(entry.id),
+            is_read: viewedEntries.has(entry.id),
           })
         }
       })
 
       // Load comments count for each entry
-      const entryIds = Array.from(latestByUser.values()).map((p) => p.id)
-      if (entryIds.length > 0) {
+      const uniqueEntryIds = Array.from(latestByUser.values()).map((p) => p.id)
+      if (uniqueEntryIds.length > 0) {
         const { data: commentsData } = await supabase
           .from("emotion_comments")
           .select("emotion_entry_id")
-          .in("emotion_entry_id", entryIds)
+          .in("emotion_entry_id", uniqueEntryIds)
 
         if (commentsData) {
           const commentCounts = new Map<string, number>()
@@ -295,11 +351,11 @@ export function PersonasView({
       }
 
       const realPersonas = Array.from(latestByUser.values())
-      // Use demo data if no real contacts exist
+      // Sort by created_at descending (most recent first)
+      realPersonas.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       setPersonas(realPersonas.length > 0 ? realPersonas : DEMO_PERSONAS)
     } catch (error) {
       console.error("Error loading personas:", error)
-      // Fallback to demo data on error
       setPersonas(DEMO_PERSONAS)
     } finally {
       setIsLoading(false)
@@ -309,6 +365,210 @@ export function PersonasView({
   useEffect(() => {
     loadPersonas()
   }, [loadPersonas])
+
+  // Toggle view (mark as seen)
+  const toggleView = async (entryId: string, hasViewed: boolean) => {
+    if (!userId) return
+
+    try {
+      if (hasViewed) {
+        await supabase.from("emotion_views").delete().eq("emotion_entry_id", entryId).eq("viewer_id", userId)
+        setPersonas((prev) =>
+          prev.map((p) =>
+            p.id === entryId
+              ? { ...p, has_viewed: false, is_read: false, views_count: Math.max(0, p.views_count - 1) }
+              : p
+          )
+        )
+      } else {
+        await supabase.from("emotion_views").insert({ emotion_entry_id: entryId, viewer_id: userId })
+        await supabase.from("emotion_entries").update({ views_count: supabase.rpc("increment") }).eq("id", entryId)
+        setPersonas((prev) =>
+          prev.map((p) =>
+            p.id === entryId ? { ...p, has_viewed: true, is_read: true, views_count: p.views_count + 1 } : p
+          )
+        )
+      }
+    } catch (error) {
+      console.error("Error toggling view:", error)
+    }
+  }
+
+  // Mark as read when clicking the card
+  const markAsRead = async (persona: PersonaEntry) => {
+    if (!userId || persona.is_read || persona.has_viewed) return
+    
+    try {
+      await supabase.from("emotion_views").insert({ emotion_entry_id: persona.id, viewer_id: userId })
+      setPersonas((prev) =>
+        prev.map((p) =>
+          p.id === persona.id ? { ...p, is_read: true, has_viewed: true, views_count: p.views_count + 1 } : p
+        )
+      )
+    } catch (error) {
+      console.error("Error marking as read:", error)
+    }
+  }
+
+  // Remove contact
+  const removeContact = async (contactUserId: string) => {
+    if (!userId) return
+    setMenuOpenId(null)
+
+    try {
+      await supabase
+        .from("contacts")
+        .delete()
+        .or(`and(user_id.eq.${userId},contact_user_id.eq.${contactUserId}),and(user_id.eq.${contactUserId},contact_user_id.eq.${userId})`)
+
+      setPersonas((prev) => prev.filter((p) => p.user_id !== contactUserId))
+    } catch (error) {
+      console.error("Error removing contact:", error)
+    }
+  }
+
+  // Open comments modal
+  const openComments = async (entryId: string) => {
+    setCommentsModalId(entryId)
+    setLoadingComments(true)
+
+    try {
+      const { data } = await supabase
+        .from("emotion_comments")
+        .select(`
+          id,
+          content,
+          author_id,
+          created_at,
+          parent_id,
+          author:profiles!emotion_comments_author_id_fkey(username, avatar_url)
+        `)
+        .eq("emotion_entry_id", entryId)
+        .order("created_at", { ascending: true })
+
+      if (data) {
+        const commentsMap = new Map<string, Comment>()
+        const rootComments: Comment[] = []
+
+        data.forEach((c) => {
+          const author = Array.isArray(c.author) ? c.author[0] : c.author
+          const comment: Comment = {
+            id: c.id,
+            content: c.content,
+            author_id: c.author_id,
+            created_at: c.created_at,
+            parent_id: c.parent_id,
+            author: {
+              username: author?.username || "Usuario",
+              avatar_url: author?.avatar_url || null,
+            },
+            replies: [],
+          }
+          commentsMap.set(c.id, comment)
+        })
+
+        commentsMap.forEach((comment) => {
+          if (comment.parent_id && commentsMap.has(comment.parent_id)) {
+            commentsMap.get(comment.parent_id)!.replies!.push(comment)
+          } else if (!comment.parent_id) {
+            rootComments.push(comment)
+          }
+        })
+
+        setComments(rootComments)
+      }
+    } catch (error) {
+      console.error("Error loading comments:", error)
+    } finally {
+      setLoadingComments(false)
+    }
+  }
+
+  // Submit comment
+  const submitComment = async () => {
+    if (!userId || !commentsModalId || !newComment.trim()) return
+
+    try {
+      const { data, error } = await supabase
+        .from("emotion_comments")
+        .insert({
+          emotion_entry_id: commentsModalId,
+          author_id: userId,
+          content: newComment.trim(),
+          parent_id: replyingTo?.id || null,
+        })
+        .select(`
+          id,
+          content,
+          author_id,
+          created_at,
+          parent_id,
+          author:profiles!emotion_comments_author_id_fkey(username, avatar_url)
+        `)
+        .single()
+
+      if (error) throw error
+
+      if (data) {
+        const author = Array.isArray(data.author) ? data.author[0] : data.author
+        const newCommentObj: Comment = {
+          id: data.id,
+          content: data.content,
+          author_id: data.author_id,
+          created_at: data.created_at,
+          parent_id: data.parent_id,
+          author: {
+            username: author?.username || "Usuario",
+            avatar_url: author?.avatar_url || null,
+          },
+          replies: [],
+        }
+
+        if (replyingTo) {
+          setComments((prev) =>
+            prev.map((c) =>
+              c.id === replyingTo.id ? { ...c, replies: [...(c.replies || []), newCommentObj] } : c
+            )
+          )
+        } else {
+          setComments((prev) => [...prev, newCommentObj])
+        }
+
+        setPersonas((prev) =>
+          prev.map((p) => (p.id === commentsModalId ? { ...p, comments_count: p.comments_count + 1 } : p))
+        )
+      }
+
+      setNewComment("")
+      setReplyingTo(null)
+    } catch (error) {
+      console.error("Error submitting comment:", error)
+    }
+  }
+
+  // Delete comment
+  const deleteComment = async (commentId: string) => {
+    try {
+      await supabase.from("emotion_comments").delete().eq("id", commentId)
+      setComments((prev) => {
+        const removeComment = (comments: Comment[]): Comment[] => {
+          return comments
+            .filter((c) => c.id !== commentId)
+            .map((c) => ({ ...c, replies: removeComment(c.replies || []) }))
+        }
+        return removeComment(prev)
+      })
+      if (commentsModalId) {
+        setPersonas((prev) =>
+          prev.map((p) =>
+            p.id === commentsModalId ? { ...p, comments_count: Math.max(0, p.comments_count - 1) } : p
+          )
+        )
+      }
+    } catch (error) {
+      console.error("Error deleting comment:", error)
+    }
+  }
 
   // Filter personas by search query
   const filteredPersonas = personas.filter((p) => {
@@ -396,72 +656,264 @@ export function PersonasView({
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3">
-            {filteredPersonas.map((persona) => (
-              <div
-                key={persona.id}
-                className="bg-white rounded-2xl p-4 relative overflow-hidden"
-                style={{
-                  backgroundColor: "#F8F8F8",
-                  borderLeft: `4px solid ${QUADRANT_BORDER_COLORS[persona.quadrant] || "#94B22E"}`,
-                }}
-              >
-                {/* Menu button */}
-                <button className="absolute top-3 right-3 text-gray-400 hover:text-gray-600">
-                  <MoreHorizontal className="w-5 h-5" />
-                </button>
+            {filteredPersonas.map((persona) => {
+              const isUnread = !persona.is_read && !persona.has_viewed
+              
+              return (
+                <div
+                  key={persona.id}
+                  onClick={() => markAsRead(persona)}
+                  className="relative rounded-2xl overflow-hidden cursor-pointer"
+                  style={{
+                    background: isUnread 
+                      ? QUADRANT_GRADIENTS[persona.quadrant] || QUADRANT_GRADIENTS.green
+                      : "#E8E8E8",
+                    padding: "3px",
+                  }}
+                >
+                  <div
+                    className="bg-white rounded-[14px] p-4 relative h-full"
+                    style={{ backgroundColor: "#F8F8F8" }}
+                  >
+                    {/* Menu button */}
+                    <div className="absolute top-3 right-3">
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setMenuOpenId(menuOpenId === persona.id ? null : persona.id)
+                        }}
+                        className="text-gray-400 hover:text-gray-600"
+                      >
+                        <MoreHorizontal className="w-5 h-5" />
+                      </button>
 
-                {/* Avatar */}
-                <div className="flex justify-center mb-3">
-                  <div className="w-14 h-14 rounded-full bg-gray-200 overflow-hidden">
-                    {persona.avatar_url ? (
-                      <img
-                        src={persona.avatar_url}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-500 text-lg font-medium">
-                        {persona.username[0].toUpperCase()}
+                      {/* Dropdown menu */}
+                      {menuOpenId === persona.id && (
+                        <div className="absolute right-0 top-6 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-10 min-w-[160px]">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              removeContact(persona.user_id)
+                            }}
+                            className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                          >
+                            <UserMinus className="w-4 h-4" />
+                            Quitar de personas
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Avatar */}
+                    <div className="flex justify-center mb-3">
+                      <div className="w-14 h-14 rounded-full bg-gray-200 overflow-hidden">
+                        {persona.avatar_url ? (
+                          <img
+                            src={persona.avatar_url}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-500 text-lg font-medium">
+                            {persona.username[0].toUpperCase()}
+                          </div>
+                        )}
                       </div>
-                    )}
+                    </div>
+
+                    {/* Username */}
+                    <p className="text-sm font-semibold text-gray-900 text-center truncate">
+                      {persona.username}
+                    </p>
+
+                    {/* Time ago */}
+                    <p className="text-xs text-gray-400 text-center mb-2">
+                      {timeAgo(persona.created_at)}
+                    </p>
+
+                    {/* Emotion */}
+                    <div className="flex items-center justify-center gap-1.5 mb-3">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full"
+                        style={{ backgroundColor: QUADRANT_DOT_COLORS[persona.quadrant] || "#94B22E" }}
+                      />
+                      <span className="text-sm text-gray-700">{persona.emotion}</span>
+                    </div>
+
+                    {/* Stats */}
+                    <div className="flex items-center justify-center gap-4 text-gray-500">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          toggleView(persona.id, persona.has_viewed || false)
+                        }}
+                        className={`flex items-center gap-1 transition-colors ${
+                          persona.has_viewed ? "text-[#84CACA]" : "text-gray-400 hover:text-gray-600"
+                        }`}
+                      >
+                        <CheckCheck className="w-4 h-4" />
+                        <span className="text-xs">{persona.views_count}</span>
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openComments(persona.id)
+                        }}
+                        className="flex items-center gap-1 text-gray-400 hover:text-gray-600 transition-colors"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                        <span className="text-xs">{persona.comments_count}</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
-
-                {/* Username */}
-                <p className="text-sm font-semibold text-gray-900 text-center truncate">
-                  {persona.display_name || persona.username}
-                </p>
-
-                {/* Time ago */}
-                <p className="text-xs text-gray-400 text-center mb-2">
-                  {timeAgo(persona.created_at)}
-                </p>
-
-                {/* Emotion */}
-                <div className="flex items-center justify-center gap-1.5 mb-3">
-                  <span
-                    className="w-2.5 h-2.5 rounded-full"
-                    style={{ backgroundColor: QUADRANT_DOT_COLORS[persona.quadrant] || "#94B22E" }}
-                  />
-                  <span className="text-sm text-gray-700">{persona.emotion}</span>
-                </div>
-
-                {/* Stats */}
-                <div className="flex items-center justify-center gap-4 text-gray-500">
-                  <div className="flex items-center gap-1">
-                    <CheckCheck className="w-4 h-4" />
-                    <span className="text-xs">{persona.views_count}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <MessageCircle className="w-4 h-4" />
-                    <span className="text-xs">{persona.comments_count}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
+
+      {/* Close menu when clicking outside */}
+      {menuOpenId && (
+        <div className="fixed inset-0 z-[5]" onClick={() => setMenuOpenId(null)} />
+      )}
+
+      {/* Comments Modal */}
+      {commentsModalId && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[100] flex items-end sm:items-center justify-center"
+          onClick={() => {
+            setCommentsModalId(null)
+            setReplyingTo(null)
+            setNewComment("")
+          }}
+        >
+          <div
+            className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl flex flex-col"
+            style={{ maxHeight: "70vh", marginBottom: "env(safe-area-inset-bottom)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="font-semibold text-gray-900">Comentarios</h3>
+              <button
+                onClick={() => {
+                  setCommentsModalId(null)
+                  setReplyingTo(null)
+                  setNewComment("")
+                }}
+                className="p-1 text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Comments list */}
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+              {loadingComments ? (
+                <div className="text-center text-gray-400 py-8">Cargando...</div>
+              ) : comments.length === 0 ? (
+                <div className="text-center text-gray-400 py-8">No hay comentarios aun</div>
+              ) : (
+                comments.map((comment) => (
+                  <div key={comment.id} className="space-y-3">
+                    {/* Main comment */}
+                    <div className="flex gap-3">
+                      <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden flex-shrink-0">
+                        {comment.author.avatar_url ? (
+                          <img src={comment.author.avatar_url} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs font-medium">
+                            {comment.author.username.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm text-gray-900">{comment.author.username}</span>
+                          <span className="text-xs text-gray-400">{formatTimeAgo(comment.created_at)}</span>
+                          {comment.author_id === userId && (
+                            <button onClick={() => deleteComment(comment.id)} className="text-red-500 hover:text-red-600 ml-auto">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-700 mt-0.5">{comment.content}</p>
+                        <button
+                          onClick={() => setReplyingTo(comment)}
+                          className="text-xs text-gray-500 hover:text-gray-700 mt-1"
+                        >
+                          Responder
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Replies */}
+                    {comment.replies && comment.replies.length > 0 && (
+                      <div className="ml-11 space-y-3">
+                        {comment.replies.map((reply) => (
+                          <div key={reply.id} className="flex gap-3">
+                            <div className="w-6 h-6 rounded-full bg-gray-200 overflow-hidden flex-shrink-0">
+                              {reply.author.avatar_url ? (
+                                <img src={reply.author.avatar_url} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-gray-500 text-[10px] font-medium">
+                                  {reply.author.username.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-xs text-gray-900">{reply.author.username}</span>
+                                <span className="text-[10px] text-gray-400">{formatTimeAgo(reply.created_at)}</span>
+                                {reply.author_id === userId && (
+                                  <button onClick={() => deleteComment(reply.id)} className="text-red-500 hover:text-red-600 ml-auto">
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-700 mt-0.5">{reply.content}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Comment input */}
+            <div className="px-5 py-4 border-t border-gray-100">
+              {replyingTo && (
+                <div className="flex items-center justify-between mb-2 text-xs text-gray-500">
+                  <span>Respondiendo a @{replyingTo.author.username}</span>
+                  <button onClick={() => setReplyingTo(null)} className="text-gray-400 hover:text-gray-600">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+              <div className="flex items-center gap-3">
+                <input
+                  type="text"
+                  placeholder="Escribe un comentario..."
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && submitComment()}
+                  className="flex-1 px-4 py-2.5 bg-gray-100 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
+                />
+                <button
+                  onClick={submitComment}
+                  disabled={!newComment.trim()}
+                  className="p-2.5 bg-gray-900 text-white rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

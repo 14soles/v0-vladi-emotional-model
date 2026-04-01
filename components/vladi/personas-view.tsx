@@ -198,6 +198,7 @@ export function PersonasView({
   const [newComment, setNewComment] = useState("")
   const [replyingTo, setReplyingTo] = useState<Comment | null>(null)
   const [sendingComment, setSendingComment] = useState(false)
+  const [selectedPersona, setSelectedPersona] = useState<PersonaEntry | null>(null)
   const commentInputRef = useRef<HTMLInputElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -716,51 +717,54 @@ export function PersonasView({
               return (
                 <div
                   key={persona.id}
-                  onClick={() => markAsRead(persona)}
-                  className="relative rounded-2xl overflow-hidden cursor-pointer"
-                  style={{
-                    background: isUnread 
-                      ? QUADRANT_GRADIENTS[persona.quadrant] || QUADRANT_GRADIENTS.green
-                      : "#E8E8E8",
-                    padding: "3px",
+                  onClick={() => {
+                    setSelectedPersona(persona)
+                    markAsRead(persona)
+                    openComments(persona.id)
                   }}
+                  className="rounded-2xl p-4 relative cursor-pointer active:scale-[0.98] transition-transform"
+                  style={{ backgroundColor: "#F8F8F8" }}
                 >
-                  <div
-                    className="bg-white rounded-[14px] p-4 relative h-full"
-                    style={{ backgroundColor: "#F8F8F8" }}
-                  >
-                    {/* Menu button */}
-                    <div className="absolute top-3 right-3">
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setMenuOpenId(menuOpenId === persona.id ? null : persona.id)
-                        }}
-                        className="text-gray-400 hover:text-gray-600"
-                      >
-                        <MoreHorizontal className="w-5 h-5" />
-                      </button>
+                  {/* Menu button */}
+                  <div className="absolute top-3 right-3">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setMenuOpenId(menuOpenId === persona.id ? null : persona.id)
+                      }}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <MoreHorizontal className="w-5 h-5" />
+                    </button>
 
-                      {/* Dropdown menu */}
-                      {menuOpenId === persona.id && (
-                        <div className="absolute right-0 top-6 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-10 min-w-[160px]">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              removeContact(persona.user_id)
-                            }}
-                            className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                          >
-                            <UserMinus className="w-4 h-4" />
-                            Quitar de personas
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                    {/* Dropdown menu */}
+                    {menuOpenId === persona.id && (
+                      <div className="absolute right-0 top-6 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-10 min-w-[160px]">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            removeContact(persona.user_id)
+                          }}
+                          className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                        >
+                          <UserMinus className="w-4 h-4" />
+                          Quitar de personas
+                        </button>
+                      </div>
+                    )}
+                  </div>
 
-                    {/* Avatar */}
-                    <div className="flex justify-center mb-3">
-                      <div className="w-14 h-14 rounded-full bg-gray-200 overflow-hidden">
+                  {/* Avatar with gradient ring for unread */}
+                  <div className="flex justify-center mb-3">
+                    <div 
+                      className="relative rounded-full p-[3px]"
+                      style={{
+                        background: isUnread 
+                          ? "conic-gradient(from 180deg, #E6584F, #E6B04F, #94B22E, #46A4A4, #466D91, #8B5A9C, #E6584F)"
+                          : "transparent"
+                      }}
+                    >
+                      <div className="w-14 h-14 rounded-full bg-gray-200 overflow-hidden border-2 border-white">
                         {persona.avatar_url ? (
                           <img
                             src={persona.avatar_url}
@@ -768,57 +772,58 @@ export function PersonasView({
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-gray-500 text-lg font-medium">
+                          <div className="w-full h-full flex items-center justify-center text-gray-500 text-lg font-medium bg-gray-200">
                             {persona.username[0].toUpperCase()}
                           </div>
                         )}
                       </div>
                     </div>
+                  </div>
 
-                    {/* Username */}
-                    <p className="text-sm font-semibold text-gray-900 text-center truncate">
-                      {persona.username}
-                    </p>
+                  {/* Username */}
+                  <p className="text-sm font-semibold text-gray-900 text-center truncate">
+                    {persona.username}
+                  </p>
 
-                    {/* Time ago */}
-                    <p className="text-xs text-gray-400 text-center mb-2">
-                      {timeAgo(persona.created_at)}
-                    </p>
+                  {/* Time ago */}
+                  <p className="text-xs text-gray-400 text-center mb-2">
+                    {timeAgo(persona.created_at)}
+                  </p>
 
-                    {/* Emotion */}
-                    <div className="flex items-center justify-center gap-1.5 mb-3">
-                      <span
-                        className="w-2.5 h-2.5 rounded-full"
-                        style={{ backgroundColor: QUADRANT_DOT_COLORS[persona.quadrant] || "#94B22E" }}
-                      />
-                      <span className="text-sm text-gray-700">{persona.emotion}</span>
-                    </div>
+                  {/* Emotion */}
+                  <div className="flex items-center justify-center gap-1.5 mb-3">
+                    <span
+                      className="w-2.5 h-2.5 rounded-full"
+                      style={{ backgroundColor: QUADRANT_DOT_COLORS[persona.quadrant] || "#94B22E" }}
+                    />
+                    <span className="text-sm text-gray-700">{persona.emotion}</span>
+                  </div>
 
-                    {/* Stats */}
-                    <div className="flex items-center justify-center gap-4 text-gray-500">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          toggleView(persona.id, persona.has_viewed || false)
-                        }}
-                        className={`flex items-center gap-1 transition-colors ${
-                          persona.has_viewed ? "text-[#84CACA]" : "text-gray-400 hover:text-gray-600"
-                        }`}
-                      >
-                        <CheckCheck className="w-4 h-4" />
-                        <span className="text-xs">{persona.views_count}</span>
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          openComments(persona.id)
-                        }}
-                        className="flex items-center gap-1 text-gray-400 hover:text-gray-600 transition-colors"
-                      >
-                        <MessageCircle className="w-4 h-4" />
-                        <span className="text-xs">{persona.comments_count}</span>
-                      </button>
-                    </div>
+                  {/* Stats */}
+                  <div className="flex items-center justify-center gap-4 text-gray-500">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        toggleView(persona.id, persona.has_viewed || false)
+                      }}
+                      className={`flex items-center gap-1 transition-colors ${
+                        persona.has_viewed ? "text-[#84CACA]" : "text-gray-400 hover:text-gray-600"
+                      }`}
+                    >
+                      <CheckCheck className="w-4 h-4" />
+                      <span className="text-xs">{persona.views_count}</span>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedPersona(persona)
+                        openComments(persona.id)
+                      }}
+                      className="flex items-center gap-1 text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                      <span className="text-xs">{persona.comments_count}</span>
+                    </button>
                   </div>
                 </div>
               )
@@ -832,11 +837,12 @@ export function PersonasView({
         <div className="fixed inset-0 z-[5]" onClick={() => setMenuOpenId(null)} />
       )}
 
-      {/* Comments Modal */}
-      {commentsModalId && (
+      {/* Detail Modal (like opening a tweet) */}
+      {selectedPersona && commentsModalId && (
         <div
           className="fixed inset-0 bg-black/50 z-[100] flex items-end sm:items-center justify-center"
           onClick={() => {
+            setSelectedPersona(null)
             setCommentsModalId(null)
             setReplyingTo(null)
             setNewComment("")
@@ -844,14 +850,14 @@ export function PersonasView({
         >
           <div
             className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl flex flex-col"
-            style={{ maxHeight: "70vh", marginBottom: "env(safe-area-inset-bottom)" }}
+            style={{ maxHeight: "85vh", marginBottom: "env(safe-area-inset-bottom)" }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <h3 className="font-semibold text-gray-900">Comentarios</h3>
               <button
                 onClick={() => {
+                  setSelectedPersona(null)
                   setCommentsModalId(null)
                   setReplyingTo(null)
                   setNewComment("")
@@ -860,6 +866,60 @@ export function PersonasView({
               >
                 <X className="w-5 h-5" />
               </button>
+              <h3 className="font-semibold text-gray-900">Registro</h3>
+              <div className="w-7" />
+            </div>
+
+            {/* Persona's emotion entry (like tweet content) */}
+            <div className="px-5 py-4 border-b border-gray-100">
+              <div className="flex items-start gap-3">
+                <div className="w-12 h-12 rounded-full bg-gray-200 overflow-hidden flex-shrink-0">
+                  {selectedPersona.avatar_url ? (
+                    <img src={selectedPersona.avatar_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-500 text-lg font-medium">
+                      {selectedPersona.username[0].toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-gray-900">{selectedPersona.username}</span>
+                    <span className="text-gray-400 text-sm">{timeAgo(selectedPersona.created_at)}</span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: QUADRANT_DOT_COLORS[selectedPersona.quadrant] || "#94B22E" }}
+                    />
+                    <span className="text-lg font-medium text-gray-900 capitalize">{selectedPersona.emotion}</span>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Stats */}
+              <div className="flex items-center gap-6 mt-4 pt-4 border-t border-gray-100">
+                <button
+                  onClick={() => {
+                    toggleView(selectedPersona.id, selectedPersona.has_viewed || false)
+                    setSelectedPersona(prev => prev ? {
+                      ...prev,
+                      has_viewed: !prev.has_viewed,
+                      views_count: prev.has_viewed ? Math.max(0, prev.views_count - 1) : prev.views_count + 1
+                    } : null)
+                  }}
+                  className={`flex items-center gap-2 transition-colors ${
+                    selectedPersona.has_viewed ? "text-[#84CACA]" : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  <CheckCheck className="w-5 h-5" />
+                  <span className="text-sm">{selectedPersona.views_count} visto</span>
+                </button>
+                <div className="flex items-center gap-2 text-gray-500">
+                  <MessageCircle className="w-5 h-5" />
+                  <span className="text-sm">{selectedPersona.comments_count} comentarios</span>
+                </div>
+              </div>
             </div>
 
             {/* Comments list */}
@@ -867,7 +927,7 @@ export function PersonasView({
               {loadingComments ? (
                 <div className="text-center text-gray-400 py-8">Cargando...</div>
               ) : comments.length === 0 ? (
-                <div className="text-center text-gray-400 py-8">No hay comentarios aun</div>
+                <div className="text-center text-gray-400 py-8">Se el primero en comentar</div>
               ) : (
                 comments.map((comment) => (
                   <div key={comment.id} className="space-y-3">

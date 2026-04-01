@@ -1,41 +1,37 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { X, Play, Check } from "lucide-react"
+import { X, Play, Check, ChevronLeft, ChevronRight } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
-// Demo questions - will be replaced with real questions from the user
-const DEMO_QUESTIONS = [
-  {
-    id: "q1",
-    type: "video" as const,
-    domain: "recognition" as const,
-    title: "RECONOCIMIENTO EMOCIONAL",
-    videoUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=300&fit=crop", // Placeholder image
-    options: ["Ansiedad", "Orgullo", "Ternura", "Calma"],
-    correctAnswer: "Ansiedad",
-  },
-  {
-    id: "q2",
-    type: "scenario" as const,
-    domain: "comprehension" as const,
-    title: 'MISIÓN — "Ponle nombre"',
-    scenario:
-      '"Llevabas días esperando una respuesta importante. Te contestan con un \'ya lo vemos\' muy frío. Notas tensión y te quedas dándole vueltas."',
-    options: ["Tristeza", "Frustración", "Vergüenza", "Alegría"],
-    correctAnswer: "Frustración",
-  },
-  {
-    id: "q3",
-    type: "scenario" as const,
-    domain: "regulation" as const,
-    title: 'MISIÓN — "Qué harías"',
-    scenario:
-      '"Un compañero te critica delante de otros. Sientes que te hierve la sangre. ¿Cuál sería tu primera reacción?"',
-    options: ["Responder de inmediato", "Respirar y calmarme", "Ignorarlo", "Pedir hablar en privado"],
-    correctAnswer: "Respirar y calmarme",
-  },
-]
+// Types for assessment data
+interface AssessmentQuestion {
+  id: string
+  code: string
+  domain: "recognition" | "understanding" | "management"
+  question_type: "single_choice" | "ranking"
+  prompt: string
+  media_type: "none" | "image" | "video"
+  media_url: string | null
+  order_index: number
+  assessment_options: AssessmentOption[]
+}
+
+interface AssessmentOption {
+  id: string
+  option_key: string
+  label: string
+  display_order: number
+  is_correct: boolean
+  weight: number
+}
+
+interface AssessmentDefinition {
+  id: string
+  slug: string
+  title: string
+  version: string
+}
 
 interface InitialQuizProps {
   userId: string
@@ -43,25 +39,53 @@ interface InitialQuizProps {
   onClose: () => void
 }
 
+// Domain labels in Spanish
+const DOMAIN_LABELS: Record<string, string> = {
+  recognition: "RECONOCIMIENTO EMOCIONAL",
+  understanding: "COMPRENSIÓN EMOCIONAL",
+  management: "REGULACIÓN EMOCIONAL",
+}
+
+// Shuffle array using Fisher-Yates algorithm
+function shuffleArray<T>(array: T[]): T[] {
+  const shuffled = [...array]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  return shuffled
+}
+
 export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
-  const [stage, setStage] = useState<"intro" | "quiz" | "completing">("intro")
+  const [stage, setStage] = useState<"loading" | "intro" | "quiz" | "completing" | "complete">("loading")
+  const [error, setError] = useState<string | null>(null)
+  
+  // Assessment data
+  const [definition, setDefinition] = useState<AssessmentDefinition | null>(null)
+  const [questions, setQuestions] = useState<AssessmentQuestion[]>([])
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  
+  // Quiz state
   const [currentIndex, setCurrentIndex] = useState(0)
-  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null)
-  const [answers, setAnswers] = useState<
-    Array<{
-      questionId: string
-      answer: string
-      responseTimeMs: number
-      shownAt: Date
-    }>
-  >([])
+  const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null)
   const [questionShownAt, setQuestionShownAt] = useState<Date | null>(null)
   const [elapsedTime, setElapsedTime] = useState(0)
-  const [sessionId, setSessionId] = useState<string | null>(null)
+  
+  // Answers tracking
+  const [answers, setAnswers] = useState<Map<string, {
+    optionId: string
+    isCorrect: boolean
+    responseTimeMs: number
+  }>>(new Map())
 
   const supabase = createClient()
-  const currentQuestion = DEMO_QUESTIONS[currentIndex]
-  const totalQuestions = DEMO_QUESTIONS.length
+  const currentQuestion = questions[currentIndex]
+  const totalQuestions = questions.length
+
+  // Load assessment data on mount
+  useEffect(() => {
+    loadAssessmentData()
+  }, [])
 
   // Timer for current question
   useEffect(() => {
@@ -81,83 +105,149 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
   }
 
-  // Start the quiz
-  const startQuiz = async () => {
+  // Load assessment definition and questions
+  const loadAssessmentData = async () => {
     try {
-      // Create a session
-      const { data: session, error } = await supabase
-        .from("initial_quiz_sessions")
+      // Get assessment definition
+      const { data: defData, error: defError } = await supabase
+        .from("assessment_definitions")
+        .select("*")
+        .eq("slug", "initial_quiz_v1")
+        .eq("is_active", true)
+        .single()
+
+      if (defError) throw defError
+      if (!defData) throw new Error("Assessment definition not found")
+
+      setDefinition(defData)
+
+      // Get all questions with options
+      const { data: questionsData, error: questionsError } = await supabase
+        .from("assessment_questions")
+        .select(`
+          *,
+          assessment_options (*)
+        `)
+        .eq("assessment_definition_id", defData.id)
+        .eq("is_active", true)
+        .order("order_index", { ascending: true })
+
+      if (questionsError) throw questionsError
+      if (!questionsData || questionsData.length === 0) {
+        throw new Error("No questions found")
+      }
+
+      // Shuffle options within each question
+      const shuffledQuestions = questionsData.map(q => ({
+        ...q,
+        assessment_options: shuffleArray(q.assessment_options)
+      }))
+
+      setQuestions(shuffledQuestions)
+      setStage("intro")
+    } catch (err) {
+      console.error("Error loading assessment:", err)
+      setError(err instanceof Error ? err.message : "Error loading quiz")
+      setStage("intro") // Still show intro, will handle error there
+    }
+  }
+
+  // Start the quiz - create session
+  const startQuiz = async () => {
+    if (!definition) {
+      setError("Quiz not loaded properly")
+      return
+    }
+
+    try {
+      // Create assessment session
+      const { data: session, error: sessionError } = await supabase
+        .from("assessment_sessions")
         .insert({
-          user_id: userId,
-          total_questions: totalQuestions,
+          profile_id: userId,
+          assessment_definition_id: definition.id,
+          session_type: "baseline",
           status: "in_progress",
+          is_first_assessment: true,
+          current_question_index: 0,
+          completed_questions_count: 0,
         })
         .select()
         .single()
 
-      if (error) throw error
+      if (sessionError) throw sessionError
 
       setSessionId(session.id)
       setStage("quiz")
       setQuestionShownAt(new Date())
       setElapsedTime(0)
-    } catch (error) {
-      console.error("Error starting quiz:", error)
-      // Continue anyway for demo
-      setStage("quiz")
-      setQuestionShownAt(new Date())
-      setElapsedTime(0)
+    } catch (err) {
+      console.error("Error starting quiz:", err)
+      setError("Error starting quiz. Please try again.")
     }
   }
 
   // Handle answer selection
-  const selectAnswer = (answer: string) => {
-    setSelectedAnswer(answer)
+  const selectOption = (optionId: string) => {
+    setSelectedOptionId(optionId)
   }
 
-  // Go to next question
+  // Save current answer and move to next question
   const nextQuestion = async () => {
-    if (!selectedAnswer || !questionShownAt) return
+    if (!selectedOptionId || !questionShownAt || !currentQuestion || !sessionId) return
+
+    const selectedOption = currentQuestion.assessment_options.find(o => o.id === selectedOptionId)
+    if (!selectedOption) return
 
     const responseTimeMs = Date.now() - questionShownAt.getTime()
-    const newAnswer = {
-      questionId: currentQuestion.id,
-      answer: selectedAnswer,
+    const isCorrect = selectedOption.is_correct
+
+    // Save answer to state
+    const newAnswers = new Map(answers)
+    newAnswers.set(currentQuestion.id, {
+      optionId: selectedOptionId,
+      isCorrect,
       responseTimeMs,
-      shownAt: questionShownAt,
-    }
+    })
+    setAnswers(newAnswers)
 
-    // Save response to database
-    if (sessionId) {
-      try {
-        await supabase.from("initial_quiz_responses").insert({
-          session_id: sessionId,
-          user_id: userId,
-          question_id: currentQuestion.id,
-          question_index: currentIndex,
-          domain: currentQuestion.domain,
-          question_type: currentQuestion.type,
-          selected_answer: selectedAnswer,
-          is_correct: selectedAnswer === currentQuestion.correctAnswer,
-          score: selectedAnswer === currentQuestion.correctAnswer ? 1 : 0,
-          response_time_ms: responseTimeMs,
-          shown_at: questionShownAt.toISOString(),
+    // Save answer to database
+    try {
+      await supabase.from("assessment_answers").insert({
+        session_id: sessionId,
+        profile_id: userId,
+        question_id: currentQuestion.id,
+        domain: currentQuestion.domain,
+        question_type: currentQuestion.question_type,
+        presented_order_json: currentQuestion.assessment_options.map(o => o.id),
+        selected_option_id: selectedOptionId,
+        is_correct: isCorrect,
+        raw_score: isCorrect ? 1 : 0,
+        response_time_ms: responseTimeMs,
+        shown_at: questionShownAt.toISOString(),
+      })
+
+      // Update session progress
+      await supabase
+        .from("assessment_sessions")
+        .update({
+          current_question_index: currentIndex + 1,
+          completed_questions_count: currentIndex + 1,
         })
-      } catch (error) {
-        console.error("Error saving response:", error)
-      }
+        .eq("id", sessionId)
+    } catch (err) {
+      console.error("Error saving answer:", err)
     }
 
-    setAnswers([...answers, newAnswer])
-
+    // Move to next question or complete
     if (currentIndex < totalQuestions - 1) {
       setCurrentIndex(currentIndex + 1)
-      setSelectedAnswer(null)
+      setSelectedOptionId(null)
       setQuestionShownAt(new Date())
       setElapsedTime(0)
     } else {
-      // Quiz complete
-      completeQuiz([...answers, newAnswer])
+      // Quiz complete - calculate and save results
+      await completeQuiz(newAnswers)
     }
   }
 
@@ -165,53 +255,84 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
   const previousQuestion = () => {
     if (currentIndex > 0) {
       setCurrentIndex(currentIndex - 1)
-      const prevAnswer = answers[currentIndex - 1]
-      setSelectedAnswer(prevAnswer?.answer || null)
+      // Restore previous answer if exists
+      const prevQuestion = questions[currentIndex - 1]
+      const prevAnswer = answers.get(prevQuestion.id)
+      setSelectedOptionId(prevAnswer?.optionId || null)
       setQuestionShownAt(new Date())
       setElapsedTime(0)
     }
   }
 
-  // Complete the quiz
-  const completeQuiz = async (finalAnswers: typeof answers) => {
+  // Complete the quiz - calculate scores and save results
+  const completeQuiz = async (finalAnswers: Map<string, { optionId: string; isCorrect: boolean; responseTimeMs: number }>) => {
     setStage("completing")
 
     try {
-      // Calculate scores
-      let scoreRecognition = 0
-      let scoreComprehension = 0
-      let scoreRegulation = 0
+      // Calculate scores by domain
+      let recognitionCorrect = 0
+      let understandingCorrect = 0
+      let managementCorrect = 0
+      let totalTimeMs = 0
 
-      finalAnswers.forEach((a, idx) => {
-        const q = DEMO_QUESTIONS[idx]
-        const isCorrect = a.answer === q.correctAnswer
-        if (isCorrect) {
-          if (q.domain === "recognition") scoreRecognition++
-          if (q.domain === "comprehension") scoreComprehension++
-          if (q.domain === "regulation") scoreRegulation++
+      questions.forEach(q => {
+        const answer = finalAnswers.get(q.id)
+        if (answer) {
+          totalTimeMs += answer.responseTimeMs
+          if (answer.isCorrect) {
+            if (q.domain === "recognition") recognitionCorrect++
+            else if (q.domain === "understanding") understandingCorrect++
+            else if (q.domain === "management") managementCorrect++
+          }
         }
       })
 
-      const scoreTotal = scoreRecognition + scoreComprehension + scoreRegulation
-      const totalDurationMs = finalAnswers.reduce((sum, a) => sum + a.responseTimeMs, 0)
+      const globalCorrect = recognitionCorrect + understandingCorrect + managementCorrect
 
-      // Update session
-      if (sessionId) {
-        await supabase
-          .from("initial_quiz_sessions")
-          .update({
-            status: "completed",
-            completed_at: new Date().toISOString(),
-            total_duration_ms: totalDurationMs,
-            score_total: scoreTotal,
-            score_recognition: scoreRecognition,
-            score_comprehension: scoreComprehension,
-            score_regulation: scoreRegulation,
-          })
-          .eq("id", sessionId)
-      }
+      // Calculate percentage scores (each domain has 12 questions max)
+      const recognitionScore100 = Math.round((recognitionCorrect / 12) * 100)
+      const understandingScore100 = Math.round((understandingCorrect / 12) * 100)
+      const managementScore100 = Math.round((managementCorrect / 12) * 100)
+      const globalScore100 = Math.round((globalCorrect / 36) * 100)
 
-      // Mark profile as completed
+      // Save results
+      const { data: resultData, error: resultError } = await supabase
+        .from("assessment_results")
+        .insert({
+          session_id: sessionId,
+          profile_id: userId,
+          recognition_score_raw: recognitionCorrect,
+          recognition_score_100: recognitionScore100,
+          understanding_score_raw: understandingCorrect,
+          understanding_score_100: understandingScore100,
+          management_score_raw: managementCorrect,
+          management_score_100: managementScore100,
+          global_score_raw: globalCorrect,
+          global_score_100: globalScore100,
+        })
+        .select()
+        .single()
+
+      if (resultError) throw resultError
+
+      // Create baseline record
+      await supabase.from("profile_assessment_baseline").insert({
+        profile_id: userId,
+        baseline_session_id: sessionId,
+        baseline_result_id: resultData.id,
+      })
+
+      // Update session as completed
+      await supabase
+        .from("assessment_sessions")
+        .update({
+          status: "completed",
+          completed_at: new Date().toISOString(),
+          total_time_ms: totalTimeMs,
+        })
+        .eq("id", sessionId)
+
+      // Mark profile as quiz completed
       await supabase
         .from("profiles")
         .update({
@@ -220,48 +341,67 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
         })
         .eq("id", userId)
 
-      // Notify parent
-      onComplete()
-    } catch (error) {
-      console.error("Error completing quiz:", error)
-      // Still notify parent to continue
+      setStage("complete")
+
+      // Wait a moment to show completion, then notify parent
+      setTimeout(() => {
+        onComplete()
+      }, 2000)
+    } catch (err) {
+      console.error("Error completing quiz:", err)
+      // Still try to mark profile and notify parent
+      try {
+        await supabase
+          .from("profiles")
+          .update({
+            initial_quiz_completed: true,
+            initial_quiz_completed_at: new Date().toISOString(),
+          })
+          .eq("id", userId)
+      } catch (e) {
+        console.error("Error updating profile:", e)
+      }
       onComplete()
     }
   }
 
-  // End quiz early
+  // End quiz early (abandon)
   const endQuizEarly = async () => {
     if (sessionId) {
       try {
         await supabase
-          .from("initial_quiz_sessions")
+          .from("assessment_sessions")
           .update({
             status: "abandoned",
             completed_at: new Date().toISOString(),
           })
           .eq("id", sessionId)
-      } catch (error) {
-        console.error("Error abandoning quiz:", error)
+      } catch (err) {
+        console.error("Error abandoning quiz:", err)
       }
     }
-    // For now, don't mark as complete - user must finish
-    // onComplete()
+    onClose()
   }
 
-  // Close/exit the quiz intro (without completing)
-  const handleClose = () => {
-    onClose()
+  // Loading screen
+  if (stage === "loading") {
+    return (
+      <div className="flex flex-col h-full bg-background items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-2 border-muted-foreground/30 border-t-foreground rounded-full mb-4" />
+        <p className="text-muted-foreground">Cargando cuestionario...</p>
+      </div>
+    )
   }
 
   // Intro Screen
   if (stage === "intro") {
     return (
-      <div className="flex flex-col h-full bg-white">
+      <div className="flex flex-col h-full bg-background">
         {/* Header with X close button */}
         <div className="flex items-center px-5 py-4">
           <button 
-            onClick={handleClose}
-            className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+            onClick={onClose}
+            className="p-1 text-muted-foreground hover:text-foreground transition-colors"
           >
             <X className="w-6 h-6" />
           </button>
@@ -278,28 +418,41 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
             />
           </div>
 
-          <h1 className="text-lg font-semibold text-gray-900 mb-4">Descubre tu punto de partida emocional</h1>
+          <h1 className="text-lg font-semibold text-foreground mb-4">Descubre tu punto de partida emocional</h1>
 
-          <p className="text-gray-600 text-base leading-relaxed mb-6">
-            Te mostraremos pequeñas situaciones, preguntas y retos breves. Tu tarea será elegir la respuesta que mejor
-            encaje contigo de la forma más natural posible.
-          </p>
+          {error ? (
+            <div className="text-destructive text-sm mb-4 p-3 bg-destructive/10 rounded-lg">
+              {error}
+            </div>
+          ) : (
+            <>
+              <p className="text-muted-foreground text-base leading-relaxed mb-6">
+                Te mostraremos pequeñas situaciones, preguntas y retos breves. Tu tarea será elegir la respuesta que mejor
+                encaje contigo de la forma más natural posible.
+              </p>
 
-          <p className="text-gray-400 text-sm italic mb-12">
-            {'"Responde con intuición. No busques la respuesta perfecta."'}
-          </p>
+              <p className="text-muted-foreground/70 text-sm italic mb-4">
+                {'"Responde con intuición. No busques la respuesta perfecta."'}
+              </p>
+
+              <p className="text-muted-foreground/50 text-xs">
+                {totalQuestions > 0 ? `${totalQuestions} preguntas · ~10 minutos` : "Cargando preguntas..."}
+              </p>
+            </>
+          )}
         </div>
 
         {/* Footer */}
         <div className="px-5 pb-8">
           <button
             onClick={startQuiz}
-            className="w-full py-4 bg-gray-900 text-white rounded-full text-base font-medium active:scale-[0.98] transition-transform"
+            disabled={questions.length === 0 || !!error}
+            className="w-full py-4 bg-foreground text-background rounded-full text-base font-medium active:scale-[0.98] transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Empezar
           </button>
 
-          <p className="text-center text-xs text-gray-400 mt-4">
+          <p className="text-center text-xs text-muted-foreground/50 mt-4">
             Si estás en crisis, contacta con un profesional{" "}
             <a href="#" className="underline">
               aquí
@@ -313,74 +466,125 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
   // Completing screen
   if (stage === "completing") {
     return (
-      <div className="flex flex-col h-full bg-white items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-2 border-gray-300 border-t-gray-900 rounded-full mb-4" />
-        <p className="text-gray-600">Guardando tus resultados...</p>
+      <div className="flex flex-col h-full bg-background items-center justify-center px-8 text-center">
+        <div className="animate-spin w-8 h-8 border-2 border-muted-foreground/30 border-t-foreground rounded-full mb-4" />
+        <p className="text-muted-foreground">Calculando tu perfil emocional...</p>
+      </div>
+    )
+  }
+
+  // Complete screen
+  if (stage === "complete") {
+    return (
+      <div className="flex flex-col h-full bg-background items-center justify-center px-8 text-center">
+        <div className="mb-6">
+          <img
+            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/1-9dY9dM01JmyMGtHobbNfbL2wHOkutm.png"
+            alt="Explorador Emocional - Nivel 1"
+            className="w-32 h-32 object-contain"
+          />
+        </div>
+        <h2 className="text-xl font-semibold text-foreground mb-2">Punto de partida completado</h2>
+        <p className="text-muted-foreground">
+          Tu perfil emocional inicial ha sido guardado. Ahora puedes empezar a explorar VLADI.
+        </p>
       </div>
     )
   }
 
   // Quiz Screen
+  if (!currentQuestion) {
+    return (
+      <div className="flex flex-col h-full bg-background items-center justify-center">
+        <p className="text-muted-foreground">Error: pregunta no encontrada</p>
+      </div>
+    )
+  }
+
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full bg-background">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-border">
         <div className="flex items-center gap-2">
-          <X className="w-5 h-5 text-[#E6584F]" />
-          <span className="text-lg font-semibold text-gray-900">Vladi</span>
+          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+            <span className="text-xs font-bold text-primary">{currentIndex + 1}</span>
+          </div>
+          <span className="text-sm text-muted-foreground">de {totalQuestions}</span>
         </div>
 
-        <span className="text-sm text-gray-500 font-mono">{formatTime(elapsedTime)}</span>
+        <span className="text-sm text-muted-foreground font-mono">{formatTime(elapsedTime)}</span>
 
-        <button onClick={endQuizEarly} className="text-sm text-gray-500 hover:text-gray-700">
-          Finalizar
+        <button 
+          onClick={endQuizEarly} 
+          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          Salir
         </button>
+      </div>
+
+      {/* Progress bar */}
+      <div className="h-1 bg-muted">
+        <div 
+          className="h-full bg-primary transition-all duration-300"
+          style={{ width: `${((currentIndex + 1) / totalQuestions) * 100}%` }}
+        />
       </div>
 
       {/* Question Content */}
       <div className="flex-1 overflow-y-auto px-5 py-6">
-        {/* Title */}
-        <p className="text-xs font-medium text-gray-400 text-center tracking-wide mb-4">{currentQuestion.title}</p>
+        {/* Domain label */}
+        <p className="text-xs font-medium text-muted-foreground text-center tracking-wide mb-4">
+          {DOMAIN_LABELS[currentQuestion.domain] || currentQuestion.domain.toUpperCase()}
+        </p>
 
-        {/* Video or Scenario */}
-        {currentQuestion.type === "video" ? (
-          <div className="relative rounded-xl overflow-hidden mb-6 bg-gray-100 aspect-video">
-            <img
-              src={currentQuestion.videoUrl}
-              alt="Video preview"
+        {/* Question prompt */}
+        <div className="mb-6">
+          <p className="text-lg text-foreground text-center leading-relaxed">
+            {currentQuestion.prompt}
+          </p>
+        </div>
+
+        {/* Media (if video/image) */}
+        {currentQuestion.media_type === "video" && currentQuestion.media_url && (
+          <div className="relative rounded-xl overflow-hidden mb-6 bg-muted aspect-video">
+            <video 
+              src={currentQuestion.media_url}
+              controls
               className="w-full h-full object-cover"
             />
-            <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-              <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center">
-                <Play className="w-6 h-6 text-gray-900 ml-1" />
-              </div>
-            </div>
           </div>
-        ) : (
-          <div className="mb-6">
-            <p className="text-lg text-gray-700 text-center leading-relaxed">{currentQuestion.scenario}</p>
+        )}
+        {currentQuestion.media_type === "image" && currentQuestion.media_url && (
+          <div className="relative rounded-xl overflow-hidden mb-6 bg-muted aspect-video">
+            <img
+              src={currentQuestion.media_url}
+              alt="Question media"
+              className="w-full h-full object-cover"
+            />
           </div>
         )}
 
         {/* Options */}
         <div className="space-y-3">
-          {currentQuestion.options.map((option) => (
+          {currentQuestion.assessment_options.map((option) => (
             <button
-              key={option}
-              onClick={() => selectAnswer(option)}
+              key={option.id}
+              onClick={() => selectOption(option.id)}
               className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl border-2 transition-all ${
-                selectedAnswer === option
-                  ? "border-gray-900 bg-gray-50"
-                  : "border-gray-200 bg-white hover:border-gray-300"
+                selectedOptionId === option.id
+                  ? "border-primary bg-primary/5"
+                  : "border-border bg-background hover:border-muted-foreground/30"
               }`}
             >
-              <span className="text-base text-gray-900">{option}</span>
+              <span className="text-base text-foreground">{option.label}</span>
               <div
                 className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-                  selectedAnswer === option ? "border-gray-900 bg-gray-900" : "border-gray-300"
+                  selectedOptionId === option.id 
+                    ? "border-primary bg-primary" 
+                    : "border-muted-foreground/30"
                 }`}
               >
-                {selectedAnswer === option && <Check className="w-4 h-4 text-white" />}
+                {selectedOptionId === option.id && <Check className="w-4 h-4 text-primary-foreground" />}
               </div>
             </button>
           ))}
@@ -388,31 +592,24 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
       </div>
 
       {/* Footer */}
-      <div className="px-5 pb-8 pt-4 border-t border-gray-100">
-        <button
-          onClick={nextQuestion}
-          disabled={!selectedAnswer}
-          className="w-full py-4 bg-gray-900 text-white rounded-full text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] transition-transform"
-        >
-          Siguiente
-        </button>
-
-        {currentIndex > 0 && (
-          <button onClick={previousQuestion} className="w-full py-3 text-gray-500 text-sm mt-2">
-            Volver atrás
+      <div className="px-5 pb-8 pt-4 border-t border-border">
+        <div className="flex gap-3">
+          {currentIndex > 0 && (
+            <button
+              onClick={previousQuestion}
+              className="flex-shrink-0 w-12 h-12 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5 text-foreground" />
+            </button>
+          )}
+          
+          <button
+            onClick={nextQuestion}
+            disabled={!selectedOptionId}
+            className="flex-1 py-4 bg-foreground text-background rounded-full text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] transition-transform"
+          >
+            {currentIndex < totalQuestions - 1 ? "Siguiente" : "Finalizar"}
           </button>
-        )}
-
-        {/* Progress indicator */}
-        <div className="flex justify-center gap-1.5 mt-4">
-          {DEMO_QUESTIONS.map((_, idx) => (
-            <div
-              key={idx}
-              className={`w-2 h-2 rounded-full transition-colors ${
-                idx === currentIndex ? "bg-gray-900" : idx < currentIndex ? "bg-gray-400" : "bg-gray-200"
-              }`}
-            />
-          ))}
         </div>
       </div>
     </div>

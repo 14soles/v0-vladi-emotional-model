@@ -229,7 +229,8 @@ export function PersonasView({
       }
 
       if (contactIds.size === 0) {
-        setPersonas([])
+        // Show demo data when no contacts
+        setPersonas(DEMO_PERSONAS)
         setIsLoading(false)
         return
       }

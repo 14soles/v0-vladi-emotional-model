@@ -13,33 +13,15 @@ interface CommonHeaderProps {
   showFilter?: boolean
   filterValue?: string
   onFilterChange?: (value: string) => void
-  onRadarClick?: () => void
   title?: string
 }
 
-export function CommonHeader({ onNotificationsClick, notificationCount = 0, onRadarClick, title = "Actividad" }: CommonHeaderProps) {
+export function CommonHeader({ onNotificationsClick, notificationCount = 0, title = "Actividad" }: CommonHeaderProps) {
   return (
     <div className="px-5 pt-[max(16px,env(safe-area-inset-top))] pb-3 flex items-center justify-between">
       <h1 className="text-xl font-bold text-gray-900">{title}</h1>
 
       <div className="flex items-center gap-1">
-        {/* Radar icon */}
-        <button
-          onClick={onRadarClick}
-          className="relative w-10 h-10 flex items-center justify-center text-gray-900 hover:opacity-70 active:opacity-50"
-          aria-label="Radar emocional"
-        >
-          <svg className="w-[22px] h-[22px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10" />
-            <circle cx="12" cy="12" r="6" />
-            <circle cx="12" cy="12" r="2" />
-            <line x1="12" y1="2" x2="12" y2="4" />
-            <line x1="12" y1="20" x2="12" y2="22" />
-            <line x1="2" y1="12" x2="4" y2="12" />
-            <line x1="20" y1="12" x2="22" y2="12" />
-          </svg>
-        </button>
-
         {/* Notifications icon */}
         <button
           onClick={onNotificationsClick}

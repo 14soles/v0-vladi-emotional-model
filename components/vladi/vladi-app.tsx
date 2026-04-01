@@ -18,6 +18,7 @@ import { ProfileScreen } from "./profile-screen"
 import { VladiChat } from "./vladi-chat" // Imported VladiChat component
 import { NotificationsView } from "./notifications-view" // Imported NotificationsView component
 import { GroupsPeopleScreen } from "./groups-people-screen" // Imported GroupsPeopleScreen component
+import { InitialQuiz } from "./initial-quiz" // Imported InitialQuiz component
 // EmotionalRadarView hidden for now
 import { useVladiStore, type MoodEntry } from "@/lib/vladi-store"
 import type { QuadrantId } from "@/lib/vladi-data"
@@ -67,6 +68,8 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
 
   const userName = userProfile?.display_name || userProfile?.username || "Usuario"
   const [showLocationPrompt, setShowLocationPrompt] = useState(true)
+  const [showInitialQuiz, setShowInitialQuiz] = useState(false)
+  const [initialQuizCompleted, setInitialQuizCompleted] = useState<boolean | null>(null)
 
   const handleNotificationsClick = useCallback(() => {
     setCurrentScreen("notifications")
@@ -75,6 +78,28 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
   const handleNotificationCountChange = useCallback((count: number) => {
     setNotificationCount(count)
   }, [])
+
+  // Check if initial quiz is completed
+  useEffect(() => {
+    if (!userId) return
+    
+    const checkQuizStatus = async () => {
+      try {
+        const { data } = await supabase
+          .from("profiles")
+          .select("initial_quiz_completed")
+          .eq("id", userId)
+          .single()
+        
+        setInitialQuizCompleted(data?.initial_quiz_completed || false)
+      } catch (error) {
+        console.error("Error checking quiz status:", error)
+        setInitialQuizCompleted(false)
+      }
+    }
+    
+    checkQuizStatus()
+  }, [userId])
 
   useEffect(() => {
     if (!userId) return
@@ -333,12 +358,25 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
       setShowProfile(true)
       return // Don't change activeTab, stay on current view
     }
+    // If clicking vladi tab and quiz not completed, show quiz
+    if (tab === "vladi" && !initialQuizCompleted) {
+      setShowInitialQuiz(true)
+      return
+    }
     setCurrentScreen("main")
     setActiveTab(tab)
-  }, [])
+  }, [initialQuizCompleted])
 
   const handleOpenProfile = useCallback(() => {
     setShowProfile(true)
+  }, [])
+
+  // Handle initial quiz completion
+  const handleQuizComplete = useCallback(() => {
+    setInitialQuizCompleted(true)
+    setShowInitialQuiz(false)
+    setActiveTab("vladi")
+    setCurrentScreen("main")
   }, [])
 
   const handleCloseProfile = useCallback(async () => {
@@ -545,6 +583,12 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
           userId={userId}
           onDismiss={() => setShowLocationPrompt(false)}
         />
+      )}
+
+      {showInitialQuiz && userId && (
+        <div className="fixed inset-0 z-[200] bg-white">
+          <InitialQuiz userId={userId} onComplete={handleQuizComplete} />
+        </div>
       )}
 
       {showProfile && (

@@ -533,21 +533,67 @@ export function PersonasView({
 
   // Submit comment
   const submitComment = async () => {
-    if (!userId || !commentsModalId || !newComment.trim() || sendingComment) return
+    console.log("[v0] submitComment called", { userId, commentsModalId, newComment: newComment.trim(), sendingComment })
+    
+    if (!userId || !commentsModalId || !newComment.trim() || sendingComment) {
+      console.log("[v0] submitComment early return - missing data")
+      return
+    }
+    
+    // Check if this is demo data (can't save comments to demo entries)
+    if (commentsModalId.startsWith("demo-")) {
+      console.log("[v0] Cannot save comments on demo entries")
+      // Still show the comment locally for demo purposes
+      const demoComment: Comment = {
+        id: `demo-comment-${Date.now()}`,
+        content: newComment.trim(),
+        author_id: userId,
+        created_at: new Date().toISOString(),
+        parent_id: replyingTo?.id || null,
+        author: {
+          username: userProfile?.username || "Usuario",
+          avatar_url: userProfile?.avatar_url || null,
+        },
+        replies: [],
+      }
+      if (replyingTo) {
+        setComments((prev) =>
+          prev.map((c) =>
+            c.id === replyingTo.id ? { ...c, replies: [...(c.replies || []), demoComment] } : c
+          )
+        )
+      } else {
+        setComments((prev) => [...prev, demoComment])
+      }
+      setPersonas((prev) =>
+        prev.map((p) => (p.id === commentsModalId ? { ...p, comments_count: p.comments_count + 1 } : p))
+      )
+      if (selectedPersona) {
+        setSelectedPersona({ ...selectedPersona, comments_count: selectedPersona.comments_count + 1 })
+      }
+      setNewComment("")
+      setReplyingTo(null)
+      return
+    }
 
     setSendingComment(true)
     try {
+      const insertData = {
+        entry_id: commentsModalId,
+        author_id: userId,
+        content: newComment.trim(),
+        parent_comment_id: replyingTo?.id || null,
+      }
+      console.log("[v0] Inserting comment:", insertData)
+      
       const { data, error } = await supabase
         .from("emotion_comments")
-        .insert({
-          entry_id: commentsModalId,
-          author_id: userId,
-          content: newComment.trim(),
-          parent_comment_id: replyingTo?.id || null,
-        })
+        .insert(insertData)
         .select("id, content, author_id, created_at, parent_comment_id")
         .single()
 
+      console.log("[v0] Insert result:", { data, error })
+      
       if (error) throw error
 
       if (data) {
@@ -577,12 +623,17 @@ export function PersonasView({
         setPersonas((prev) =>
           prev.map((p) => (p.id === commentsModalId ? { ...p, comments_count: p.comments_count + 1 } : p))
         )
+        
+        // Update selectedPersona count
+        if (selectedPersona && selectedPersona.id === commentsModalId) {
+          setSelectedPersona({ ...selectedPersona, comments_count: selectedPersona.comments_count + 1 })
+        }
       }
 
       setNewComment("")
       setReplyingTo(null)
     } catch (error) {
-      console.error("Error submitting comment:", error)
+      console.error("[v0] Error submitting comment:", error)
     } finally {
       setSendingComment(false)
     }

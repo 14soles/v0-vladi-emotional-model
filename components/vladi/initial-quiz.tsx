@@ -391,29 +391,39 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
   // Intro Screen
   if (stage === "intro") {
     return (
-      <div className="flex flex-col h-full bg-background">
+      <div className="flex flex-col h-full min-h-screen bg-background">
         {/* Header with X close button */}
-        <div className="flex items-center px-5 py-4">
+        <div className="flex items-center px-5 pt-5">
           <button 
             onClick={onClose}
-            className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+            className="p-1 text-foreground/70 hover:text-foreground transition-colors"
           >
-            <X className="w-6 h-6" />
+            <X className="w-5 h-5" strokeWidth={1.5} />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
+        {/* Content - centered vertically */}
+        <div className="flex-1 flex flex-col items-center justify-center px-10 -mt-8">
+          {/* Vladi Logo */}
+          <img 
+            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Logo-fcHJRsxAqLJb5NnpPWPuhRu1tTl5Z3.png" 
+            alt="Vladi"
+            className="h-6 w-auto mb-8"
+          />
+
           {/* Level 1 Badge - Explorador Emocional */}
           <div className="mb-6">
             <img
               src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/1-9dY9dM01JmyMGtHobbNfbL2wHOkutm.png"
               alt="Explorador Emocional - Nivel 1"
-              className="w-40 h-40 object-contain"
+              className="w-28 h-28 object-contain"
             />
           </div>
 
-          <h1 className="text-lg font-semibold text-foreground mb-4">Descubre tu punto de partida emocional</h1>
+          {/* Small title */}
+          <h2 className="text-sm font-semibold text-foreground mb-6">
+            Descubre tu punto de partida emocional
+          </h2>
 
           {error ? (
             <div className="text-destructive text-sm mb-4 p-3 bg-destructive/10 rounded-lg">
@@ -421,24 +431,23 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
             </div>
           ) : (
             <>
-              <p className="text-muted-foreground text-base leading-relaxed mb-6">
-                Te mostraremos pequeñas situaciones, preguntas y retos breves. Tu tarea será elegir la respuesta que mejor
-                encaje contigo de la forma más natural posible.
+              {/* Main description - larger text */}
+              <p className="text-[22px] leading-[1.4] text-foreground text-center mb-8 font-normal">
+                Te mostraremos pequeñas situaciones, preguntas y retos breves. Tu tarea será elegir la respuesta que mejor encaje contigo de la forma más natural posible.
               </p>
 
-              <p className="text-muted-foreground/70 text-sm italic mb-4">
-                {'"Responde con intuición. No busques la respuesta perfecta."'}
-              </p>
-
-              <p className="text-muted-foreground/50 text-xs">
-                {totalQuestions > 0 ? `${totalQuestions} preguntas · ~10 minutos` : "Cargando preguntas..."}
+              {/* Italic quote */}
+              <p className="text-sm text-muted-foreground italic text-center leading-relaxed">
+                {'"Responde con intuición. No busques la'}
+                <br />
+                {'respuesta perfecta."'}
               </p>
             </>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="px-5 pb-8">
+        {/* Footer - fixed at bottom */}
+        <div className="px-8 pb-6 pt-4">
           <button
             onClick={startQuiz}
             disabled={questions.length === 0 || !!error}
@@ -447,11 +456,12 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
             Empezar
           </button>
 
-          <p className="text-center text-xs text-muted-foreground/50 mt-4">
+          <p className="text-center text-xs text-muted-foreground mt-4">
             Si estás en crisis, contacta con un profesional{" "}
-            <a href="#" className="underline">
+            <a href="#" className="underline hover:text-foreground transition-colors">
               aquí
             </a>
+            .
           </p>
         </div>
       </div>

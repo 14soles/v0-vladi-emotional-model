@@ -390,10 +390,10 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
     setCurrentScreen("main")
   }, [])
 
-  // Handle closing quiz without completing (go back to personas tab)
+  // Handle closing quiz without completing (stay on vladi tab showing RecordView)
   const handleQuizClose = useCallback(() => {
     setShowInitialQuiz(false)
-    setActiveTab("personas") // Navigate away from vladi tab since quiz is required there
+    // Stay on vladi tab - user will see RecordView (registro de emoción)
   }, [])
 
   const handleCloseProfile = useCallback(async () => {

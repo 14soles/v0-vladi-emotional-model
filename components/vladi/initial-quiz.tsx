@@ -386,10 +386,7 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
         <div className="flex items-center px-5 pt-5">
           <button 
             type="button"
-            onClick={() => {
-              console.log("[v0] X button clicked on loading - closing quiz")
-              onClose()
-            }}
+            onClick={onClose}
             className="p-1 text-foreground/70 hover:text-foreground transition-colors z-50"
           >
             <X className="w-5 h-5" strokeWidth={1.5} />
@@ -411,10 +408,7 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
         <div className="flex items-center px-5 pt-5">
           <button 
             type="button"
-            onClick={() => {
-              console.log("[v0] X button clicked - closing quiz")
-              onClose()
-            }}
+            onClick={onClose}
             className="p-1 text-foreground/70 hover:text-foreground transition-colors z-50"
           >
             <X className="w-5 h-5" strokeWidth={1.5} />

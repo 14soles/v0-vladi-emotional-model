@@ -59,25 +59,13 @@ export function BottomNavbar({ activeTab, onTabChange, userProfile }: BottomNavb
                   </svg>
                 )}
 
-                {/* Vladi icon - colorful star/spark */}
+                {/* Vladi icon - colorful X logo */}
                 {tab.id === "vladi" && (
-                  <svg className="w-[22px] h-[22px] mb-1" viewBox="0 0 24 24" fill="none">
-                    {isActive ? (
-                      <>
-                        <path d="M12 2L14 10L22 12L14 14L12 22L10 14L2 12L10 10L12 2Z" fill="#E6584F" />
-                        <path d="M12 2L14 10L22 12L14 14L12 22" fill="#E6B04F" />
-                        <path d="M12 22L10 14L2 12L10 10L12 2" fill="#94B22E" />
-                        <path d="M12 12L14 10L12 2L10 10L12 12Z" fill="#466D91" />
-                      </>
-                    ) : (
-                      <path 
-                        d="M12 2L14 10L22 12L14 14L12 22L10 14L2 12L10 10L12 2Z" 
-                        stroke="currentColor" 
-                        strokeWidth="1.5" 
-                        fill="none"
-                      />
-                    )}
-                  </svg>
+                  <img 
+                    src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/icono%20vladi-LyAeS8i4DjdjTo778LM2XQmnxJoVcX.png"
+                    alt="Vladi"
+                    className={`w-[22px] h-[22px] mb-1 ${isActive ? "" : "opacity-50"}`}
+                  />
                 )}
 
                 {/* Tu Panel icon - bar chart */}

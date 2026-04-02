@@ -501,15 +501,11 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
       {/* Header - Vladi logo, Timer, Finalizar button */}
       <div className="flex items-center justify-between px-5 py-4">
         {/* Vladi Logo */}
-        <div className="flex items-center gap-1.5">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="#FF6B6B"/>
-            <path d="M12 2L8.91 8.26L2 9.27L7 14.14L5.82 21.02L12 17.77V2Z" fill="#4ECDC4"/>
-            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77V2Z" fill="#FFE66D"/>
-            <circle cx="12" cy="12" r="3" fill="#2D3436"/>
-          </svg>
-          <span className="font-semibold text-foreground">Vladi</span>
-        </div>
+        <img 
+          src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Logo-fcHJRsxAqLJb5NnpPWPuhRu1tTl5Z3.png" 
+          alt="Vladi"
+          className="h-6 w-auto"
+        />
 
         {/* Timer */}
         <span className="text-sm text-muted-foreground font-mono">{formatTime(elapsedTime)}</span>

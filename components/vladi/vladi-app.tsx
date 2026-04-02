@@ -40,7 +40,7 @@ interface VladiAppProps {
 }
 
 export default function VladiApp({ userId, userProfile: initialUserProfile }: VladiAppProps) {
-  const [activeTab, setActiveTab] = useState("personas")
+  const [activeTab, setActiveTab] = useState("vladi")
   const [currentScreen, setCurrentScreen] = useState<
     "main" | "emotion" | "context" | "mirror" | "vladi-chat" | "notifications" | "personas"
   >("main")
@@ -478,12 +478,13 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
         )
       case "vladi":
         return (
-          <VladiChat
-            userId={userId}
+          <RecordView
+            onStartCheckIn={handleStartCheckIn}
             userName={userName}
-            onClose={() => setActiveTab("personas")}
-            emotionalContext={vladiChatContext || undefined}
-            conversationSummary={conversationSummary}
+            userProfile={userProfile}
+            onAvatarClick={handleOpenProfile}
+            onNotificationsClick={handleNotificationsClick}
+            notificationCount={notificationCount}
           />
         )
       case "home":

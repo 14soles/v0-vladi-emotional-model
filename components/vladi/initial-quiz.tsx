@@ -519,13 +519,10 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
     )
   }
 
-  // Calculate progress percentage
-  const progressPercentage = ((currentIndex + 1) / totalQuestions) * 100
-
   return (
     <div className="flex flex-col h-full min-h-screen bg-background">
       {/* Header - Vladi logo, Timer, Finalizar button */}
-      <div className="flex items-center justify-between px-5 py-4">
+      <div className="flex items-center justify-between px-5 py-3">
         {/* Vladi Logo */}
         <img 
           src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Logo-fcHJRsxAqLJb5NnpPWPuhRu1tTl5Z3.png" 
@@ -546,47 +543,37 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
         </button>
       </div>
 
-      {/* Progress bar */}
-      <div className="px-5 pb-2">
-        <div className="h-1 bg-muted rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-foreground rounded-full transition-all duration-300 ease-out"
-            style={{ width: `${progressPercentage}%` }}
-          />
-        </div>
-      </div>
-
-      {/* Question Content */}
-      <div className="flex-1 overflow-y-auto px-6 pt-6 pb-4">
+      {/* Question Content - scrollable area */}
+      <div className="flex-1 overflow-y-auto">
         {/* Question prompt */}
-        <div className="mb-6">
+        <div className="px-6 pt-6 pb-4">
           <p className="text-[17px] text-foreground text-center leading-relaxed">
             {currentQuestion.prompt}
           </p>
         </div>
 
-        {/* Media (if video/image) */}
+        {/* Media (if video/image) - full width */}
         {currentQuestion.media_type === "video" && currentQuestion.media_url && (
-          <div className="relative rounded-xl overflow-hidden mb-6 bg-muted aspect-[4/3] max-w-sm mx-auto">
+          <div className="relative overflow-hidden mb-5 bg-muted mx-4 rounded-2xl">
             <video 
               src={currentQuestion.media_url}
               controls
-              className="w-full h-full object-cover"
+              className="w-full h-auto object-cover"
             />
           </div>
         )}
         {currentQuestion.media_type === "image" && currentQuestion.media_url && (
-          <div className="relative rounded-xl overflow-hidden mb-6 bg-muted aspect-[4/3] max-w-sm mx-auto">
+          <div className="relative overflow-hidden mb-5 bg-muted mx-4 rounded-2xl">
             <img
               src={currentQuestion.media_url}
               alt="Question media"
-              className="w-full h-full object-cover"
+              className="w-full h-auto object-cover"
             />
           </div>
         )}
 
         {/* Options - Pill style buttons with circle checkbox on right */}
-        <div className="space-y-3">
+        <div className="px-5 space-y-3 pb-4">
           {currentQuestion.assessment_options.map((option) => (
             <button
               key={option.id}
@@ -613,8 +600,8 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
         </div>
       </div>
 
-      {/* Footer - Siguiente button and Volver atrás link */}
-      <div className="px-6 pb-8 pt-4 bg-background">
+      {/* Footer - Siguiente button and Volver atrás link - fixed at bottom */}
+      <div className="px-6 pb-6 pt-4 mt-auto bg-background">
         <button
           type="button"
           onClick={nextQuestion}
@@ -628,7 +615,7 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
           type="button"
           onClick={currentIndex > 0 ? previousQuestion : undefined}
           disabled={currentIndex === 0}
-          className={`w-full py-3 text-sm transition-colors mt-2 ${
+          className={`w-full py-3 text-sm transition-colors mt-1 ${
             currentIndex > 0 
               ? "text-muted-foreground hover:text-foreground cursor-pointer" 
               : "text-transparent cursor-default"

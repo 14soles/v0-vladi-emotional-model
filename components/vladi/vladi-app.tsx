@@ -536,7 +536,7 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
     <div className="relative h-[100dvh] flex flex-col bg-white overflow-hidden">
       <div className="flex-1 flex flex-col overflow-hidden min-h-0">{renderMainView()}</div>
 
-      {currentScreen === "main" && activeTab !== "vladi" && (
+      {currentScreen === "main" && (
         <BottomNavbar activeTab={activeTab} onTabChange={handleTabChange} userProfile={userProfile} />
       )}
 

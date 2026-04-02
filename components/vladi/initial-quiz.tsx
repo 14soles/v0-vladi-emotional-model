@@ -519,8 +519,21 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
     )
   }
 
+  // Calculate progress percentage
+  const progressPercentage = ((currentIndex + 1) / totalQuestions) * 100
+
   return (
     <div className="flex flex-col h-full min-h-screen bg-background">
+      {/* Progress bar - subtle at top */}
+      <div className="px-4 pt-3">
+        <div className="h-1 bg-muted/50 rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-foreground/20 rounded-full transition-all duration-300 ease-out"
+            style={{ width: `${progressPercentage}%` }}
+          />
+        </div>
+      </div>
+
       {/* Header - Vladi logo, Timer, Finalizar button */}
       <div className="flex items-center justify-between px-5 py-3">
         {/* Vladi Logo */}

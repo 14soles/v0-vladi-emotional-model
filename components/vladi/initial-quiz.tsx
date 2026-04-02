@@ -519,46 +519,55 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
     )
   }
 
+  // Calculate progress percentage
+  const progressPercentage = ((currentIndex + 1) / totalQuestions) * 100
+
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="flex flex-col h-full min-h-screen bg-background">
       {/* Header - Vladi logo, Timer, Finalizar button */}
       <div className="flex items-center justify-between px-5 py-4">
         {/* Vladi Logo */}
         <img 
           src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Logo-fcHJRsxAqLJb5NnpPWPuhRu1tTl5Z3.png" 
           alt="Vladi"
-          className="h-6 w-auto"
+          className="h-5 w-auto"
         />
 
         {/* Timer */}
-        <span className="text-sm text-muted-foreground font-mono">{formatTime(elapsedTime)}</span>
+        <span className="text-sm text-foreground/70">{formatTime(elapsedTime)}</span>
 
         {/* Finalizar button */}
         <button 
+          type="button"
           onClick={endQuizEarly} 
-          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          className="text-sm text-foreground/70 hover:text-foreground transition-colors"
         >
           Finalizar
         </button>
       </div>
 
-      {/* Question Content */}
-      <div className="flex-1 overflow-y-auto px-6 py-8">
-        {/* Question counter */}
-        <p className="text-xs font-medium text-muted-foreground text-center tracking-wide mb-6">
-          Pregunta {currentIndex + 1} de {totalQuestions}
-        </p>
+      {/* Progress bar */}
+      <div className="px-5 pb-2">
+        <div className="h-1 bg-muted rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-foreground rounded-full transition-all duration-300 ease-out"
+            style={{ width: `${progressPercentage}%` }}
+          />
+        </div>
+      </div>
 
+      {/* Question Content */}
+      <div className="flex-1 overflow-y-auto px-6 pt-6 pb-4">
         {/* Question prompt */}
-        <div className="mb-8">
-          <p className="text-lg text-foreground text-center leading-relaxed">
+        <div className="mb-6">
+          <p className="text-[17px] text-foreground text-center leading-relaxed">
             {currentQuestion.prompt}
           </p>
         </div>
 
         {/* Media (if video/image) */}
         {currentQuestion.media_type === "video" && currentQuestion.media_url && (
-          <div className="relative rounded-xl overflow-hidden mb-6 bg-muted aspect-video">
+          <div className="relative rounded-xl overflow-hidden mb-6 bg-muted aspect-[4/3] max-w-sm mx-auto">
             <video 
               src={currentQuestion.media_url}
               controls
@@ -567,7 +576,7 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
           </div>
         )}
         {currentQuestion.media_type === "image" && currentQuestion.media_url && (
-          <div className="relative rounded-xl overflow-hidden mb-6 bg-muted aspect-video">
+          <div className="relative rounded-xl overflow-hidden mb-6 bg-muted aspect-[4/3] max-w-sm mx-auto">
             <img
               src={currentQuestion.media_url}
               alt="Question media"
@@ -576,11 +585,12 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
           </div>
         )}
 
-        {/* Options - Pill style buttons */}
+        {/* Options - Pill style buttons with circle checkbox on right */}
         <div className="space-y-3">
           {currentQuestion.assessment_options.map((option) => (
             <button
               key={option.id}
+              type="button"
               onClick={() => selectOption(option.id)}
               className={`w-full flex items-center justify-between px-5 py-4 rounded-full border transition-all ${
                 selectedOptionId === option.id
@@ -588,15 +598,15 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
                   : "border-border bg-background hover:border-muted-foreground/50"
               }`}
             >
-              <span className="text-base text-foreground">{option.label}</span>
+              <span className="text-[15px] text-foreground">{option.label}</span>
               <div
-                className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                className={`w-7 h-7 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
                   selectedOptionId === option.id 
                     ? "border-foreground bg-foreground" 
                     : "border-muted-foreground/30 bg-transparent"
                 }`}
               >
-                {selectedOptionId === option.id && <Check className="w-3.5 h-3.5 text-background" />}
+                {selectedOptionId === option.id && <Check className="w-4 h-4 text-background" strokeWidth={2.5} />}
               </div>
             </button>
           ))}
@@ -604,8 +614,9 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
       </div>
 
       {/* Footer - Siguiente button and Volver atrás link */}
-      <div className="px-6 pb-8 pt-4">
+      <div className="px-6 pb-8 pt-4 bg-background">
         <button
+          type="button"
           onClick={nextQuestion}
           disabled={!selectedOptionId}
           className="w-full py-4 bg-foreground text-background rounded-full text-base font-medium disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all"
@@ -613,16 +624,18 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
           Siguiente
         </button>
         
-        {currentIndex > 0 ? (
-          <button
-            onClick={previousQuestion}
-            className="w-full py-3 text-sm text-muted-foreground hover:text-foreground transition-colors mt-2"
-          >
-            Volver atrás
-          </button>
-        ) : (
-          <div className="h-10" /> /* Spacer when no back button */
-        )}
+        <button
+          type="button"
+          onClick={currentIndex > 0 ? previousQuestion : undefined}
+          disabled={currentIndex === 0}
+          className={`w-full py-3 text-sm transition-colors mt-2 ${
+            currentIndex > 0 
+              ? "text-muted-foreground hover:text-foreground cursor-pointer" 
+              : "text-transparent cursor-default"
+          }`}
+        >
+          Volver atrás
+        </button>
       </div>
     </div>
   )

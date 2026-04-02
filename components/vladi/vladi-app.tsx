@@ -592,7 +592,7 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
       )}
 
       {showInitialQuiz && userId && (
-        <div className="fixed inset-0 z-[200] bg-white">
+        <div className="fixed inset-0 bottom-[72px] z-[60] bg-background">
           <InitialQuiz userId={userId} onComplete={handleQuizComplete} onClose={handleQuizClose} />
         </div>
       )}

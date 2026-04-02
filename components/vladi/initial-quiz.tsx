@@ -524,16 +524,6 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
 
   return (
     <div className="flex flex-col h-full min-h-screen bg-background">
-      {/* Progress bar - subtle at top */}
-      <div className="px-4 pt-3">
-        <div className="h-1 bg-muted/50 rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-foreground/20 rounded-full transition-all duration-300 ease-out"
-            style={{ width: `${progressPercentage}%` }}
-          />
-        </div>
-      </div>
-
       {/* Header - Vladi logo, Timer, Finalizar button */}
       <div className="flex items-center justify-between px-5 py-3">
         {/* Vladi Logo */}
@@ -558,6 +548,16 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
 
       {/* Question Content - scrollable area */}
       <div className="flex-1 overflow-y-auto">
+        {/* Progress bar - black, below header, above question text */}
+        <div className="px-6 pt-4 pb-2">
+          <div className="h-1 bg-muted rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-foreground rounded-full transition-all duration-300 ease-out"
+              style={{ width: `${progressPercentage}%` }}
+            />
+          </div>
+        </div>
+
         {/* Question prompt */}
         <div className="px-6 pt-6 pb-4">
           <p className="text-[17px] text-foreground text-center leading-relaxed">

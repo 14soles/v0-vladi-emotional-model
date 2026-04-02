@@ -91,7 +91,13 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
           .eq("id", userId)
           .single()
         
-        setInitialQuizCompleted(data?.initial_quiz_completed || false)
+        const completed = data?.initial_quiz_completed || false
+        setInitialQuizCompleted(completed)
+        
+        // If quiz not completed and we're on vladi tab, show quiz automatically
+        if (!completed && activeTab === "vladi") {
+          setShowInitialQuiz(true)
+        }
       } catch (error) {
         console.error("Error checking quiz status:", error)
         setInitialQuizCompleted(false)
@@ -99,7 +105,7 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
     }
     
     checkQuizStatus()
-  }, [userId])
+  }, [userId, activeTab])
 
   useEffect(() => {
     if (!userId) return
@@ -358,14 +364,23 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
       setShowProfile(true)
       return // Don't change activeTab, stay on current view
     }
+    
+    // Close quiz if open when switching tabs
+    if (showInitialQuiz && tab !== "vladi") {
+      setShowInitialQuiz(false)
+    }
+    
     // If clicking vladi tab and quiz not completed, show quiz
     if (tab === "vladi" && !initialQuizCompleted) {
+      setActiveTab(tab)
+      setCurrentScreen("main")
       setShowInitialQuiz(true)
       return
     }
+    
     setCurrentScreen("main")
     setActiveTab(tab)
-  }, [initialQuizCompleted])
+  }, [initialQuizCompleted, showInitialQuiz])
 
   const handleOpenProfile = useCallback(() => {
     setShowProfile(true)
@@ -379,9 +394,10 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
     setCurrentScreen("main")
   }, [])
 
-  // Handle closing quiz without completing (just go back)
+  // Handle closing quiz without completing (go back to personas tab)
   const handleQuizClose = useCallback(() => {
     setShowInitialQuiz(false)
+    setActiveTab("personas") // Navigate away from vladi tab since quiz is required there
   }, [])
 
   const handleCloseProfile = useCallback(async () => {
@@ -536,7 +552,7 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
     <div className="relative h-[100dvh] flex flex-col bg-white overflow-hidden">
       <div className="flex-1 flex flex-col overflow-hidden min-h-0">{renderMainView()}</div>
 
-      {currentScreen === "main" && (
+      {currentScreen === "main" && !showInitialQuiz && (
         <BottomNavbar activeTab={activeTab} onTabChange={handleTabChange} userProfile={userProfile} />
       )}
 
@@ -592,7 +608,7 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
       )}
 
       {showInitialQuiz && userId && (
-        <div className="fixed inset-0 bottom-[72px] z-[60] bg-background">
+        <div className="fixed inset-0 z-[60] bg-background">
           <InitialQuiz userId={userId} onComplete={handleQuizComplete} onClose={handleQuizClose} />
         </div>
       )}

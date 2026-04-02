@@ -381,9 +381,24 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
   // Loading screen
   if (stage === "loading") {
     return (
-      <div className="flex flex-col h-full bg-background items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-2 border-muted-foreground/30 border-t-foreground rounded-full mb-4" />
-        <p className="text-muted-foreground">Cargando cuestionario...</p>
+      <div className="flex flex-col h-full min-h-screen bg-background">
+        {/* Header with X close button */}
+        <div className="flex items-center px-5 pt-5">
+          <button 
+            type="button"
+            onClick={() => {
+              console.log("[v0] X button clicked on loading - closing quiz")
+              onClose()
+            }}
+            className="p-1 text-foreground/70 hover:text-foreground transition-colors z-50"
+          >
+            <X className="w-5 h-5" strokeWidth={1.5} />
+          </button>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center">
+          <div className="animate-spin w-8 h-8 border-2 border-muted-foreground/30 border-t-foreground rounded-full mb-4" />
+          <p className="text-muted-foreground">Cargando cuestionario...</p>
+        </div>
       </div>
     )
   }
@@ -395,8 +410,12 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
         {/* Header with X close button */}
         <div className="flex items-center px-5 pt-5">
           <button 
-            onClick={onClose}
-            className="p-1 text-foreground/70 hover:text-foreground transition-colors"
+            type="button"
+            onClick={() => {
+              console.log("[v0] X button clicked - closing quiz")
+              onClose()
+            }}
+            className="p-1 text-foreground/70 hover:text-foreground transition-colors z-50"
           >
             <X className="w-5 h-5" strokeWidth={1.5} />
           </button>

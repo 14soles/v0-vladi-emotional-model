@@ -79,7 +79,7 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
     setNotificationCount(count)
   }, [])
 
-  // Check if initial quiz is completed
+  // Check if initial quiz is completed (only on mount)
   useEffect(() => {
     if (!userId) return
     
@@ -93,11 +93,7 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
         
         const completed = data?.initial_quiz_completed || false
         setInitialQuizCompleted(completed)
-        
-        // If quiz not completed and we're on vladi tab, show quiz automatically
-        if (!completed && activeTab === "vladi") {
-          setShowInitialQuiz(true)
-        }
+        // Don't auto-show quiz here - only show when user clicks vladi tab
       } catch (error) {
         console.error("Error checking quiz status:", error)
         setInitialQuizCompleted(false)
@@ -105,7 +101,7 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
     }
     
     checkQuizStatus()
-  }, [userId, activeTab])
+  }, [userId])
 
   useEffect(() => {
     if (!userId) return
@@ -365,13 +361,13 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
       return // Don't change activeTab, stay on current view
     }
     
-    // Close quiz if open when switching tabs
+    // Close quiz if open when switching to a different tab
     if (showInitialQuiz && tab !== "vladi") {
       setShowInitialQuiz(false)
     }
     
     // If clicking vladi tab and quiz not completed, show quiz
-    if (tab === "vladi" && !initialQuizCompleted) {
+    if (tab === "vladi" && initialQuizCompleted === false) {
       setActiveTab(tab)
       setCurrentScreen("main")
       setShowInitialQuiz(true)

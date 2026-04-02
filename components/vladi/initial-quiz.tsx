@@ -35,7 +35,7 @@ interface AssessmentDefinition {
 
 interface InitialQuizProps {
   userId: string
-  onComplete: () => void
+  onComplete: (showResults?: boolean) => void
   onClose: () => void
 }
 
@@ -337,11 +337,7 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
         .eq("id", userId)
 
       setStage("complete")
-
-      // Wait a moment to show completion, then notify parent
-      setTimeout(() => {
-        onComplete()
-      }, 2000)
+      // User will click "Ver resultados" or "Continuar" to proceed
     } catch (err) {
       console.error("Error completing quiz:", err)
       // Still try to mark profile and notify parent
@@ -356,7 +352,7 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
       } catch (e) {
         console.error("Error updating profile:", e)
       }
-      onComplete()
+      onComplete(false)
     }
   }
 
@@ -491,21 +487,66 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
     )
   }
 
-  // Complete screen
+  // Complete screen with celebration animation
   if (stage === "complete") {
     return (
-      <div className="flex flex-col h-full bg-background items-center justify-center px-8 text-center">
-        <div className="mb-6">
-          <img
-            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/1-9dY9dM01JmyMGtHobbNfbL2wHOkutm.png"
-            alt="Explorador Emocional - Nivel 1"
-            className="w-32 h-32 object-contain"
+      <div className="flex flex-col h-full min-h-screen bg-background">
+        {/* Content - centered */}
+        <div className="flex-1 flex flex-col items-center justify-center px-10">
+          {/* Vladi Logo */}
+          <img 
+            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Logo-fcHJRsxAqLJb5NnpPWPuhRu1tTl5Z3.png" 
+            alt="Vladi"
+            className="h-6 w-auto mb-8 animate-fade-in"
           />
+
+          {/* Level 1 Badge with animation */}
+          <div className="mb-6 animate-scale-in">
+            <div className="relative">
+              <img
+                src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/1-9dY9dM01JmyMGtHobbNfbL2wHOkutm.png"
+                alt="Explorador Emocional - Nivel 1"
+                className="w-32 h-32 object-contain animate-pulse-subtle"
+              />
+              {/* Subtle glow effect */}
+              <div className="absolute inset-0 bg-gradient-to-t from-yellow-200/20 to-transparent rounded-full blur-xl -z-10" />
+            </div>
+          </div>
+
+          {/* Title */}
+          <h1 className="text-2xl font-bold text-foreground mb-2 animate-fade-in-up">
+            Enhorabuena
+          </h1>
+
+          {/* Subtitle */}
+          <h2 className="text-base font-medium text-foreground mb-6 animate-fade-in-up animation-delay-100">
+            Has completado el Nivel 1: Explorador emocional
+          </h2>
+
+          {/* Description */}
+          <p className="text-sm text-muted-foreground text-center leading-relaxed animate-fade-in-up animation-delay-200">
+            Ya hemos identificado tu punto de partida emocional. A partir de aquí podrás descubrir tus resultados y desbloquear nuevas herramientas para seguir avanzando.
+          </p>
         </div>
-        <h2 className="text-xl font-semibold text-foreground mb-2">Punto de partida completado</h2>
-        <p className="text-muted-foreground">
-          Tu perfil emocional inicial ha sido guardado. Ahora puedes empezar a explorar VLADI.
-        </p>
+
+        {/* Footer */}
+        <div className="px-8 pb-6 pt-4">
+          <button
+            type="button"
+            onClick={() => onComplete(true)}
+            className="w-full py-4 bg-foreground text-background rounded-full text-base font-medium active:scale-[0.98] transition-transform"
+          >
+            Ver resultados
+          </button>
+          
+          <button
+            type="button"
+            onClick={() => onComplete(false)}
+            className="w-full py-3 text-sm text-muted-foreground hover:text-foreground transition-colors mt-2"
+          >
+            Continuar
+          </button>
+        </div>
       </div>
     )
   }

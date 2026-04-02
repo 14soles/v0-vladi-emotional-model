@@ -10,6 +10,7 @@ import { EmotionalAwarenessBlock } from "./emotional-awareness-block"
 import { EmotionalSummaryBlock } from "./emotional-summary-block"
 import { ConversationHistoryBlock } from "./conversation-history-block"
 import { ContextTriggersBlock } from "./context-triggers-block"
+import { QuizBaselineBlock } from "./quiz-baseline-block"
 import { useContextPatterns } from "@/lib/hooks/use-context-patterns"
 
 interface IEQPanelProps {
@@ -421,6 +422,11 @@ export function IEQPanel({ userId, onStartChat }: IEQPanelProps) {
               }
             }}
           />
+        </div>
+
+        {/* Quiz Baseline Block - Initial assessment results */}
+        <div className="w-full">
+          <QuizBaselineBlock userId={userId} />
         </div>
       </div>
 

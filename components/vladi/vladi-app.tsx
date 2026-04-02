@@ -383,10 +383,15 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
   }, [])
 
   // Handle initial quiz completion
-  const handleQuizComplete = useCallback(() => {
+  const handleQuizComplete = useCallback((showResults?: boolean) => {
     setInitialQuizCompleted(true)
     setShowInitialQuiz(false)
-    setActiveTab("vladi")
+    if (showResults) {
+      // Navigate to stats page to show results
+      setActiveTab("stats")
+    } else {
+      setActiveTab("vladi")
+    }
     setCurrentScreen("main")
   }, [])
 

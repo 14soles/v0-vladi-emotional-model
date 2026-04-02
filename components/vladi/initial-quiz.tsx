@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { X, Check } from "lucide-react"
+import { X, Check, GripVertical } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
 // Types for assessment data
@@ -63,12 +63,15 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
   // Quiz state
   const [currentIndex, setCurrentIndex] = useState(0)
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null)
+  const [rankedOptions, setRankedOptions] = useState<AssessmentOption[]>([])
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const [questionShownAt, setQuestionShownAt] = useState<Date | null>(null)
   const [elapsedTime, setElapsedTime] = useState(0)
   
   // Answers tracking
   const [answers, setAnswers] = useState<Map<string, {
-    optionId: string
+    optionId: string | null
+    rankedOrder: string[] | null
     isCorrect: boolean
     responseTimeMs: number
   }>>(new Map())
@@ -182,25 +185,109 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
     }
   }
 
-  // Handle answer selection
+  // Handle answer selection for single choice
   const selectOption = (optionId: string) => {
     setSelectedOptionId(optionId)
   }
 
+  // Initialize ranked options when question changes
+  useEffect(() => {
+    if (currentQuestion?.question_type === "ranking") {
+      // Check if we have a previous answer for this question
+      const prevAnswer = answers.get(currentQuestion.id)
+      if (prevAnswer?.rankedOrder) {
+        // Restore previous order
+        const orderedOptions = prevAnswer.rankedOrder
+          .map(id => currentQuestion.assessment_options.find(o => o.id === id))
+          .filter(Boolean) as AssessmentOption[]
+        setRankedOptions(orderedOptions)
+      } else {
+        // Start with shuffled options
+        setRankedOptions([...currentQuestion.assessment_options])
+      }
+    }
+  }, [currentIndex, currentQuestion])
+
+  // Handle drag start for ranking
+  const handleDragStart = (index: number) => {
+    setDraggedIndex(index)
+  }
+
+  // Handle drag over for ranking
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault()
+    if (draggedIndex === null || draggedIndex === index) return
+    
+    const newRanked = [...rankedOptions]
+    const draggedItem = newRanked[draggedIndex]
+    newRanked.splice(draggedIndex, 1)
+    newRanked.splice(index, 0, draggedItem)
+    setRankedOptions(newRanked)
+    setDraggedIndex(index)
+  }
+
+  // Handle drag end
+  const handleDragEnd = () => {
+    setDraggedIndex(null)
+  }
+
+  // Handle touch-based reordering for mobile
+  const moveOption = (fromIndex: number, direction: "up" | "down") => {
+    const toIndex = direction === "up" ? fromIndex - 1 : fromIndex + 1
+    if (toIndex < 0 || toIndex >= rankedOptions.length) return
+    
+    const newRanked = [...rankedOptions]
+    const temp = newRanked[fromIndex]
+    newRanked[fromIndex] = newRanked[toIndex]
+    newRanked[toIndex] = temp
+    setRankedOptions(newRanked)
+  }
+
   // Save current answer and move to next question
   const nextQuestion = async () => {
-    if (!selectedOptionId || !questionShownAt || !currentQuestion || !sessionId) return
+    if (!questionShownAt || !currentQuestion || !sessionId) return
 
-    const selectedOption = currentQuestion.assessment_options.find(o => o.id === selectedOptionId)
-    if (!selectedOption) return
+    const isRanking = currentQuestion.question_type === "ranking"
+    
+    // Validate we have an answer
+    if (!isRanking && !selectedOptionId) return
+    if (isRanking && rankedOptions.length === 0) return
 
     const responseTimeMs = Date.now() - questionShownAt.getTime()
-    const isCorrect = selectedOption.is_correct
+    
+    let isCorrect = false
+    let rawScore = 0
+
+    if (isRanking) {
+      // For ranking questions, check if order matches correct order
+      // Get correct order from metadata or options weights
+      const correctOrder = currentQuestion.assessment_options
+        .sort((a, b) => b.weight - a.weight)
+        .map(o => o.id)
+      const userOrder = rankedOptions.map(o => o.id)
+      
+      // Calculate score based on position matches (partial credit)
+      let correctPositions = 0
+      for (let i = 0; i < userOrder.length; i++) {
+        if (userOrder[i] === correctOrder[i]) {
+          correctPositions++
+        }
+      }
+      rawScore = correctPositions / userOrder.length
+      isCorrect = rawScore >= 0.75 // Consider correct if 75%+ positions match
+    } else {
+      // Single choice
+      const selectedOption = currentQuestion.assessment_options.find(o => o.id === selectedOptionId)
+      if (!selectedOption) return
+      isCorrect = selectedOption.is_correct
+      rawScore = isCorrect ? 1 : 0
+    }
 
     // Save answer to state
     const newAnswers = new Map(answers)
     newAnswers.set(currentQuestion.id, {
-      optionId: selectedOptionId,
+      optionId: isRanking ? null : selectedOptionId,
+      rankedOrder: isRanking ? rankedOptions.map(o => o.id) : null,
       isCorrect,
       responseTimeMs,
     })
@@ -215,9 +302,10 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
         domain: currentQuestion.domain,
         question_type: currentQuestion.question_type,
         presented_order_json: currentQuestion.assessment_options.map(o => o.id),
-        selected_option_id: selectedOptionId,
+        selected_option_id: isRanking ? null : selectedOptionId,
+        selected_order_json: isRanking ? rankedOptions.map(o => o.id) : null,
         is_correct: isCorrect,
-        raw_score: isCorrect ? 1 : 0,
+        raw_score: rawScore,
         response_time_ms: responseTimeMs,
         shown_at: questionShownAt.toISOString(),
       })
@@ -238,6 +326,7 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
     if (currentIndex < totalQuestions - 1) {
       setCurrentIndex(currentIndex + 1)
       setSelectedOptionId(null)
+      setRankedOptions([])
       setQuestionShownAt(new Date())
       setElapsedTime(0)
     } else {
@@ -254,13 +343,14 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
       const prevQuestion = questions[currentIndex - 1]
       const prevAnswer = answers.get(prevQuestion.id)
       setSelectedOptionId(prevAnswer?.optionId || null)
+      // Ranked options will be restored in the useEffect
       setQuestionShownAt(new Date())
       setElapsedTime(0)
     }
   }
 
   // Complete the quiz - calculate scores and save results
-  const completeQuiz = async (finalAnswers: Map<string, { optionId: string; isCorrect: boolean; responseTimeMs: number }>) => {
+  const completeQuiz = async (finalAnswers: Map<string, { optionId: string | null; rankedOrder: string[] | null; isCorrect: boolean; responseTimeMs: number }>) => {
     setStage("completing")
 
     try {
@@ -626,32 +716,93 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
           </div>
         )}
 
-        {/* Options - Pill style buttons with circle checkbox on right */}
-        <div className="px-5 space-y-3 pb-4">
-          {currentQuestion.assessment_options.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              onClick={() => selectOption(option.id)}
-              className={`w-full flex items-center justify-between px-5 py-4 rounded-full border transition-all ${
-                selectedOptionId === option.id
-                  ? "border-foreground bg-background"
-                  : "border-border bg-background hover:border-muted-foreground/50"
-              }`}
-            >
-              <span className="text-[15px] text-foreground">{option.label}</span>
+        {/* Options - Different UI based on question type */}
+        {currentQuestion.question_type === "ranking" ? (
+          // Ranking question - drag and drop or tap to reorder
+          <div className="px-5 space-y-2 pb-4">
+            <p className="text-xs text-muted-foreground text-center mb-3">
+              Arrastra o usa las flechas para ordenar
+            </p>
+            {rankedOptions.map((option, index) => (
               <div
-                className={`w-7 h-7 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                  selectedOptionId === option.id 
-                    ? "border-foreground bg-foreground" 
-                    : "border-muted-foreground/30 bg-transparent"
+                key={option.id}
+                draggable
+                onDragStart={() => handleDragStart(index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragEnd={handleDragEnd}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl border transition-all cursor-move select-none ${
+                  draggedIndex === index
+                    ? "border-foreground bg-muted/50 scale-[1.02] shadow-lg"
+                    : "border-border bg-background hover:border-muted-foreground/50"
                 }`}
               >
-                {selectedOptionId === option.id && <Check className="w-4 h-4 text-background" strokeWidth={2.5} />}
+                {/* Position number */}
+                <div className="flex items-center gap-3">
+                  <span className="w-6 h-6 rounded-full bg-foreground text-background text-xs font-medium flex items-center justify-center">
+                    {index + 1}
+                  </span>
+                  <span className="text-[15px] text-foreground">{option.label}</span>
+                </div>
+                
+                {/* Reorder controls */}
+                <div className="flex items-center gap-1">
+                  {/* Up/Down buttons for mobile */}
+                  <div className="flex flex-col -my-1">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); moveOption(index, "up"); }}
+                      disabled={index === 0}
+                      className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M18 15l-6-6-6 6"/>
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); moveOption(index, "down"); }}
+                      disabled={index === rankedOptions.length - 1}
+                      className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M6 9l6 6 6-6"/>
+                      </svg>
+                    </button>
+                  </div>
+                  {/* Drag handle */}
+                  <GripVertical className="w-5 h-5 text-muted-foreground/50" />
+                </div>
               </div>
-            </button>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          // Single choice question - radio buttons
+          <div className="px-5 space-y-3 pb-4">
+            {currentQuestion.assessment_options.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => selectOption(option.id)}
+                className={`w-full flex items-center justify-between px-5 py-4 rounded-full border transition-all ${
+                  selectedOptionId === option.id
+                    ? "border-foreground bg-background"
+                    : "border-border bg-background hover:border-muted-foreground/50"
+                }`}
+              >
+                <span className="text-[15px] text-foreground">{option.label}</span>
+                <div
+                  className={`w-7 h-7 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                    selectedOptionId === option.id 
+                      ? "border-foreground bg-foreground" 
+                      : "border-muted-foreground/30 bg-transparent"
+                  }`}
+                >
+                  {selectedOptionId === option.id && <Check className="w-4 h-4 text-background" strokeWidth={2.5} />}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Footer - Siguiente button and Volver atrás link - fixed at bottom */}
@@ -659,7 +810,7 @@ export function InitialQuiz({ userId, onComplete, onClose }: InitialQuizProps) {
         <button
           type="button"
           onClick={nextQuestion}
-          disabled={!selectedOptionId}
+          disabled={currentQuestion.question_type === "ranking" ? rankedOptions.length === 0 : !selectedOptionId}
           className="w-full py-4 bg-foreground text-background rounded-full text-base font-medium disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all"
         >
           Siguiente

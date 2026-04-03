@@ -253,80 +253,85 @@ export function ContextSheet({ emotionData, onClose, onPublish, userId }: Contex
                   : "bg-transparent border border-gray-300 hover:border-gray-400"
               }`}
             >
-              {photoUrl ? (
-                <Check className="w-5 h-5 text-background" strokeWidth={2.5} />
-              ) : (
-                <CameraIcon className="w-5 h-5 text-gray-600" />
+              <CameraIcon className={`w-5 h-5 ${photoUrl ? "text-background" : "text-gray-600"}`} />
+              {photoUrl && (
+                <div className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-foreground rounded-full flex items-center justify-center border-2 border-background">
+                  <Check className="w-2.5 h-2.5 text-background" strokeWidth={3} />
+                </div>
               )}
             </button>
 
             {/* Activity icon - What were you doing */}
             <button
               onClick={() => setActiveQuestion("activity")}
-              className={`w-11 h-11 rounded-full flex items-center justify-center transition-all touch-manipulation ${
+              className={`w-11 h-11 rounded-full flex items-center justify-center transition-all touch-manipulation relative ${
                 activityText || selectedTags.size > 0
                   ? "bg-foreground" 
                   : "bg-transparent border border-gray-300 hover:border-gray-400"
               }`}
             >
-              {activityText || selectedTags.size > 0 ? (
-                <Check className="w-5 h-5 text-background" strokeWidth={2.5} />
-              ) : (
-                <PersonIcon className="w-5 h-5 text-gray-600" />
+              <PersonIcon className={`w-5 h-5 ${activityText || selectedTags.size > 0 ? "text-background" : "text-gray-600"}`} />
+              {(activityText || selectedTags.size > 0) && (
+                <div className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-foreground rounded-full flex items-center justify-center border-2 border-background">
+                  <Check className="w-2.5 h-2.5 text-background" strokeWidth={3} />
+                </div>
               )}
             </button>
 
             {/* Company icon - Who were you with */}
             <button
               onClick={() => setActiveQuestion("company")}
-              className={`w-11 h-11 rounded-full flex items-center justify-center transition-all touch-manipulation ${
+              className={`w-11 h-11 rounded-full flex items-center justify-center transition-all touch-manipulation relative ${
                 companyText
                   ? "bg-foreground" 
                   : "bg-transparent border border-gray-300 hover:border-gray-400"
               }`}
             >
-              {companyText ? (
-                <Check className="w-5 h-5 text-background" strokeWidth={2.5} />
-              ) : (
-                <PeopleIcon className="w-5 h-5 text-gray-600" />
+              <PeopleIcon className={`w-5 h-5 ${companyText ? "text-background" : "text-gray-600"}`} />
+              {companyText && (
+                <div className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-foreground rounded-full flex items-center justify-center border-2 border-background">
+                  <Check className="w-2.5 h-2.5 text-background" strokeWidth={3} />
+                </div>
               )}
             </button>
 
             {/* Time icon - When was it */}
             <button
               onClick={() => setActiveQuestion("time")}
-              className={`w-11 h-11 rounded-full flex items-center justify-center transition-all touch-manipulation ${
+              className={`w-11 h-11 rounded-full flex items-center justify-center transition-all touch-manipulation relative ${
                 timeReference
                   ? "bg-foreground" 
                   : "bg-transparent border border-gray-300 hover:border-gray-400"
               }`}
             >
-              {timeReference ? (
-                <Check className="w-5 h-5 text-background" strokeWidth={2.5} />
-              ) : (
-                <ClockIcon className="w-5 h-5 text-gray-600" />
+              <ClockIcon className={`w-5 h-5 ${timeReference ? "text-background" : "text-gray-600"}`} />
+              {timeReference && (
+                <div className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-foreground rounded-full flex items-center justify-center border-2 border-background">
+                  <Check className="w-2.5 h-2.5 text-background" strokeWidth={3} />
+                </div>
               )}
             </button>
 
             {/* Body icon - Where do you feel it */}
             <button
               onClick={() => setActiveQuestion("body")}
-              className={`w-11 h-11 rounded-full flex items-center justify-center transition-all touch-manipulation ${
+              className={`w-11 h-11 rounded-full flex items-center justify-center transition-all touch-manipulation relative ${
                 bodySignals.size > 0
                   ? "bg-foreground" 
                   : "bg-transparent border border-gray-300 hover:border-gray-400"
               }`}
             >
-              {bodySignals.size > 0 ? (
-                <Check className="w-5 h-5 text-background" strokeWidth={2.5} />
-              ) : (
-                <BodyMindIcon className="w-5 h-5 text-gray-600" />
+              <BodyMindIcon className={`w-5 h-5 ${bodySignals.size > 0 ? "text-background" : "text-gray-600"}`} />
+              {bodySignals.size > 0 && (
+                <div className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-foreground rounded-full flex items-center justify-center border-2 border-background">
+                  <Check className="w-2.5 h-2.5 text-background" strokeWidth={3} />
+                </div>
               )}
             </button>
           </div>
 
-          {/* Selected tags */}
-          {selectedTags.size > 0 && (
+          {/* Selected context chips - shows what's been filled */}
+          {(selectedTags.size > 0 || activityText || companyText || timeReference || bodySignals.size > 0) && (
             <div className="w-full flex flex-wrap justify-center gap-2 mt-3 px-2 shrink-0">
               {Array.from(selectedTags).map((tag) => (
                 <div
@@ -342,6 +347,50 @@ export function ContextSheet({ emotionData, onClose, onPublish, userId }: Contex
                   </button>
                 </div>
               ))}
+              {activityText && !selectedTags.has(activityText) && (
+                <div className="bg-gray-100 px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs sm:text-sm text-gray-700 font-medium">
+                  {activityText}
+                  <button
+                    onClick={() => setActivityText("")}
+                    className="text-gray-400 hover:text-gray-600 touch-manipulation"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              {companyText && (
+                <div className="bg-gray-100 px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs sm:text-sm text-gray-700 font-medium">
+                  {companyText}
+                  <button
+                    onClick={() => setCompanyText("")}
+                    className="text-gray-400 hover:text-gray-600 touch-manipulation"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              {timeReference && (
+                <div className="bg-gray-100 px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs sm:text-sm text-gray-700 font-medium">
+                  {timeReference}
+                  <button
+                    onClick={() => setTimeReference("")}
+                    className="text-gray-400 hover:text-gray-600 touch-manipulation"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              {bodySignals.size > 0 && (
+                <div className="bg-gray-100 px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs sm:text-sm text-gray-700 font-medium">
+                  {Array.from(bodySignals).join(", ")}
+                  <button
+                    onClick={() => setBodySignals(new Set())}
+                    className="text-gray-400 hover:text-gray-600 touch-manipulation"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

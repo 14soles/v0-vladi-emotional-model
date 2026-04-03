@@ -1,4 +1,4 @@
-import { generateImage } from "ai"
+import { generateText } from "ai"
 
 export async function POST(req: Request) {
   try {
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
       sceneElements.push(`scene reflecting: ${contextText.substring(0, 100)}`)
     }
 
-    const prompt = `Create a minimalist, artistic illustration representing the emotion "${emotion}". 
+    const prompt = `Generate an artistic illustration representing the emotion "${emotion}". 
 Style: Modern, clean line art with ${colorPalette}. 
 Atmosphere: ${timeOfDay}.
 Scene elements: ${sceneElements.length > 0 ? sceneElements.join(", ") : "abstract emotional representation"}.
@@ -56,21 +56,26 @@ The image should be calming, introspective, and suitable for a wellness/emotiona
 No text in the image. Simple, elegant composition with plenty of white space.
 Square format, centered composition.`
 
-    // Use Gemini's image generation model via AI Gateway (Nano Banana 2)
-    const result = await generateImage({
+    // Use Gemini's multimodal model that can generate images via AI Gateway
+    const result = await generateText({
       model: "google/gemini-3.1-flash-image-preview",
+      providerOptions: {
+        google: {
+          responseModalities: ["image", "text"],
+        },
+      },
       prompt,
-      n: 1,
-      size: "1024x1024",
     })
 
-    // Extract image from response
-    const image = result.images?.[0]
+    // Extract image from response files
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const files = (result as any).files
+    const imageFile = files?.[0]
     
-    if (image && image.base64) {
+    if (imageFile && imageFile.base64) {
       return Response.json({ 
         success: true,
-        imageUrl: `data:image/png;base64,${image.base64}`,
+        imageUrl: `data:${imageFile.mimeType || "image/png"};base64,${imageFile.base64}`,
       })
     }
 

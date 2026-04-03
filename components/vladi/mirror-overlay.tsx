@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { X, Brain } from "lucide-react"
+import { X, Brain, Lightbulb } from "lucide-react"
 import type { EmotionData } from "./emotion-screen"
 
 interface MirrorOverlayProps {
@@ -11,14 +11,12 @@ interface MirrorOverlayProps {
   bodySignals?: string[]
   timeReference?: string
   certainty?: string
-  company?: string
-  photoUrl?: string
   onClose: () => void
 }
 
 interface MirrorResult {
   text: string
-  generatedImageUrl?: string
+  tip: string
 }
 
 export function MirrorOverlay({
@@ -28,12 +26,9 @@ export function MirrorOverlay({
   bodySignals,
   timeReference,
   certainty,
-  company,
-  photoUrl,
   onClose,
 }: MirrorOverlayProps) {
   const [loading, setLoading] = useState(true)
-  const [imageLoading, setImageLoading] = useState(true)
   const [result, setResult] = useState<MirrorResult | null>(null)
 
   useEffect(() => {
@@ -44,59 +39,42 @@ export function MirrorOverlay({
         )
         const companyTags = contextTags.filter((t) => t.startsWith("Con:")).map((t) => t.replace("Con:", "").trim())
 
-        // Generate mirror text and image in parallel
-        const [mirrorResponse, imageResponse] = await Promise.all([
-          fetch("/api/ai/emotional-mirror", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              emotion: emotionData.emotion,
-              intensity: emotionData.energy,
-              wellbeing: emotionData.pleasantness,
-              context: {
-                notes: contextText,
-                activityTags,
-                companyTags,
-                bodyLocation: bodySignals?.join(", "),
-                whenOccurred: timeReference,
-                certaintyBucket: certainty,
-              },
-            }),
+        const mirrorResponse = await fetch("/api/ai/emotional-mirror", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            emotion: emotionData.emotion,
+            intensity: emotionData.energy,
+            wellbeing: emotionData.pleasantness,
+            context: {
+              notes: contextText,
+              activityTags,
+              companyTags,
+              bodyLocation: bodySignals?.join(", "),
+              whenOccurred: timeReference,
+              certaintyBucket: certainty,
+            },
           }),
-          fetch("/api/ai/generate-emotion-image", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              emotion: emotionData.emotion,
-              quadrant: emotionData.quadrant,
-              company: company || companyTags.join(", "),
-              bodySignals,
-              timeReference,
-              contextText,
-              photoUrl,
-            }),
-          }),
-        ])
+        })
 
         const mirrorData = await mirrorResponse.json()
-        const imageData = await imageResponse.json()
 
         setResult({
           text: mirrorData.text,
-          generatedImageUrl: imageData.success ? imageData.imageUrl : undefined,
+          tip: mirrorData.tip || "Reconocer y nombrar tus emociones es el primer paso hacia una mayor inteligencia emocional.",
         })
       } catch {
         setResult({
           text: "Gracias por compartir tus emociones. Tu registro me ayuda a comprenderte mejor.",
+          tip: "Tómate un momento para respirar profundamente y conectar con tu cuerpo.",
         })
       } finally {
         setLoading(false)
-        setImageLoading(false)
       }
     }
 
     generateMirror()
-  }, [emotionData, contextText, contextTags, bodySignals, timeReference, certainty, company, photoUrl])
+  }, [emotionData, contextText, contextTags, bodySignals, timeReference, certainty])
 
   return (
     <div
@@ -123,33 +101,36 @@ export function MirrorOverlay({
         </div>
       ) : (
         <div className="max-w-[400px] w-full flex flex-col items-center animate-in fade-in slide-in-from-bottom-2 duration-500">
-          {/* Generated emotion image or brain icon fallback */}
-          {result?.generatedImageUrl ? (
-            <div className="w-48 h-48 sm:w-56 sm:h-56 rounded-3xl overflow-hidden mb-6 shadow-lg">
-              <img 
-                src={result.generatedImageUrl} 
-                alt="Tu momento emocional" 
-                className="w-full h-full object-cover"
-              />
-            </div>
-          ) : imageLoading ? (
-            <div className="w-48 h-48 sm:w-56 sm:h-56 rounded-3xl bg-gray-100 mb-6 flex items-center justify-center">
-              <div className="flex flex-col items-center">
-                <div className="w-12 h-12 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin mb-2" />
-                <p className="text-xs text-gray-400">Generando imagen...</p>
-              </div>
-            </div>
-          ) : (
-            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-black text-white rounded-full flex items-center justify-center mb-4 sm:mb-6">
-              <Brain className="w-10 h-10 sm:w-12 sm:h-12" />
-            </div>
-          )}
+          {/* Brain icon */}
+          <div className="w-16 h-16 sm:w-20 sm:h-20 bg-foreground text-background rounded-full flex items-center justify-center mb-4 sm:mb-6">
+            <Brain className="w-10 h-10 sm:w-12 sm:h-12" />
+          </div>
 
-          <h2 className="text-xl sm:text-2xl font-medium text-gray-900 mb-4 sm:mb-6 leading-snug">
+          <h2 className="text-xl sm:text-2xl font-medium text-foreground mb-4 sm:mb-6 leading-snug">
             ¡Gracias por compartir tus emociones!
           </h2>
 
-          <p className="text-sm sm:text-base text-gray-600 leading-relaxed px-2">{result?.text}</p>
+          {/* Validation text */}
+          <p className="text-sm sm:text-base text-muted-foreground leading-relaxed px-2 mb-6">
+            {result?.text}
+          </p>
+
+          {/* Tip section */}
+          {result?.tip && (
+            <div className="w-full bg-amber-50 border border-amber-200 rounded-2xl p-4 flex gap-3 items-start">
+              <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <Lightbulb className="w-4 h-4 text-amber-600" />
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">
+                  Tip de inteligencia emocional
+                </p>
+                <p className="text-sm text-amber-900 leading-relaxed">
+                  {result.tip}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

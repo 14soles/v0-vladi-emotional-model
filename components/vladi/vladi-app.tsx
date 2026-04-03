@@ -592,8 +592,6 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
           bodySignals={contextData.bodySignals}
           timeReference={contextData.timeReference}
           certainty={contextData.certainty}
-          company={contextData.company}
-          photoUrl={contextData.photoUrl}
           onClose={handleCloseMirror}
         />
       )}

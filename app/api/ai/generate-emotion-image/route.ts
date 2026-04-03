@@ -1,8 +1,8 @@
-import { generateText } from "ai"
+import { generateImage } from "ai"
 
 export async function POST(req: Request) {
   try {
-    const { emotion, quadrant, company, bodySignals, timeReference, contextText, photoUrl } = await req.json()
+    const { emotion, quadrant, company, bodySignals, timeReference, contextText } = await req.json()
 
     // Build a descriptive prompt for image generation
     const timeOfDay = timeReference?.toLowerCase().includes("mañana") 
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     const colorPalette = emotionColors[quadrant] || "soft pastel colors"
 
     // Create a scene description based on context
-    let sceneElements: string[] = []
+    const sceneElements: string[] = []
     
     if (company) {
       if (company.toLowerCase().includes("solo") || company.toLowerCase().includes("nadie")) {
@@ -54,27 +54,23 @@ Atmosphere: ${timeOfDay}.
 Scene elements: ${sceneElements.length > 0 ? sceneElements.join(", ") : "abstract emotional representation"}.
 The image should be calming, introspective, and suitable for a wellness/emotional tracking app.
 No text in the image. Simple, elegant composition with plenty of white space.
-${photoUrl ? "Reference mood/style from uploaded photo." : ""}
 Square format, centered composition.`
 
-    // Use Gemini's image generation model via AI Gateway
-    const result = await generateText({
-      model: "google/gemini-2.0-flash-exp-image-generation",
-      providerOptions: {
-        google: {
-          responseModalities: ["image", "text"],
-        },
-      },
+    // Use Gemini's image generation model via AI Gateway (Nano Banana 2)
+    const result = await generateImage({
+      model: "google/gemini-3.1-flash-image-preview",
       prompt,
+      n: 1,
+      size: "1024x1024",
     })
 
     // Extract image from response
-    const imageFile = result.files?.[0]
+    const image = result.images?.[0]
     
-    if (imageFile && imageFile.base64) {
+    if (image && image.base64) {
       return Response.json({ 
         success: true,
-        imageUrl: `data:${imageFile.mimeType};base64,${imageFile.base64}`,
+        imageUrl: `data:image/png;base64,${image.base64}`,
       })
     }
 

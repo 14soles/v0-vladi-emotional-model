@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useEffect, useRef } from "react"
-import { X, ArrowRight, CheckCircle2, XCircle } from "lucide-react"
+import { X } from "lucide-react"
 import { 
   selectItems, 
   randomizeOptions, 
@@ -277,25 +277,35 @@ export function PutANameTool({
 
     return (
       <div className="fixed inset-0 bg-background z-50 flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4">
-          <button
-            onClick={onClose}
-            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-muted transition-colors touch-manipulation"
-          >
-            <X className="w-6 h-6 text-foreground" />
-          </button>
-          
-          {/* Progress indicator */}
-          <div className="text-sm text-muted-foreground">
-            {currentIndex + 1} / {items.length}
+        {/* Header - matches Vladi app style */}
+        <div className="flex items-center justify-between px-4 py-3">
+          {/* Logo */}
+          <div className="flex items-center gap-1.5">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M12 2L15 8L22 9L17 14L18 21L12 18L6 21L7 14L2 9L9 8L12 2Z" fill="#EF4444"/>
+              <path d="M12 6L13.5 9L17 9.5L14.5 12L15 15.5L12 14L9 15.5L9.5 12L7 9.5L10.5 9L12 6Z" fill="#22C55E"/>
+              <path d="M12 8L12.75 9.5L14.5 9.75L13.25 11L13.5 12.75L12 12L10.5 12.75L10.75 11L9.5 9.75L11.25 9.5L12 8Z" fill="#3B82F6"/>
+              <path d="M12 9L12.375 9.75L13.25 9.875L12.625 10.5L12.75 11.375L12 11L11.25 11.375L11.375 10.5L10.75 9.875L11.625 9.75L12 9Z" fill="#FBBF24"/>
+            </svg>
+            <span className="text-base font-semibold text-foreground">Vladi</span>
           </div>
           
-          <div className="w-10" /> {/* Spacer */}
+          {/* Progress indicator */}
+          <div className="text-sm font-medium text-foreground">
+            {currentIndex + 1}/{items.length}
+          </div>
+          
+          {/* Finalizar link */}
+          <button
+            onClick={onClose}
+            className="text-sm font-medium text-foreground hover:text-muted-foreground transition-colors touch-manipulation"
+          >
+            Finalizar
+          </button>
         </div>
 
         {/* Progress bar */}
-        <div className="px-4 mb-6">
+        <div className="px-4 pt-2 pb-8">
           <div className="h-1 bg-muted rounded-full overflow-hidden">
             <div 
               className="h-full bg-foreground transition-all duration-300"
@@ -305,30 +315,55 @@ export function PutANameTool({
         </div>
 
         {/* Question content */}
-        <div className="flex-1 flex flex-col px-6 pb-6">
-          {/* Prompt */}
-          <div className="bg-muted/50 rounded-2xl p-5 mb-6">
-            <p className="text-foreground text-lg leading-relaxed">
+        <div className="flex-1 flex flex-col px-6">
+          {/* Prompt text - centered and clean */}
+          <div className="flex-1 flex items-start justify-center pt-8">
+            <p className="text-foreground text-center text-lg leading-relaxed max-w-sm">
               {currentItem.item.prompt}
             </p>
           </div>
 
-          {/* Options */}
-          <div className="flex-1 flex flex-col gap-3">
+          {/* Options - pill style with selection circles */}
+          <div className="flex flex-col gap-3 pb-6">
             {currentItem.shuffledOptions.map((option, index) => {
               const isSelected = currentItem.selectedIndex === index
               const isCorrectOption = index === currentItem.correctIndex
               
-              let optionStyle = "bg-background border-2 border-muted text-foreground"
+              // Determine circle and border styles
+              let borderStyle = "border-muted"
+              let circleContent = (
+                <div className="w-6 h-6 rounded-full border-2 border-muted" />
+              )
               
               if (hasAnswered && showFeedback) {
                 if (isCorrectOption) {
-                  optionStyle = "bg-green-50 border-2 border-green-500 text-green-700"
+                  borderStyle = "border-green-500"
+                  circleContent = (
+                    <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  )
                 } else if (isSelected && !currentItem.isCorrect) {
-                  optionStyle = "bg-red-50 border-2 border-red-500 text-red-700"
+                  borderStyle = "border-red-500"
+                  circleContent = (
+                    <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </div>
+                  )
                 }
               } else if (isSelected) {
-                optionStyle = "bg-foreground border-2 border-foreground text-background"
+                borderStyle = "border-foreground"
+                circleContent = (
+                  <div className="w-6 h-6 rounded-full bg-foreground flex items-center justify-center">
+                    <svg className="w-4 h-4 text-background" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                )
               }
 
               return (
@@ -337,35 +372,50 @@ export function PutANameTool({
                   onClick={() => handleSelectOption(index)}
                   disabled={hasAnswered}
                   className={`
-                    w-full py-4 px-5 rounded-2xl text-left font-medium text-base
+                    w-full py-4 px-5 rounded-full bg-background border-2 text-left
                     transition-all duration-200 touch-manipulation
                     flex items-center justify-between
-                    ${optionStyle}
+                    ${borderStyle}
                     ${!hasAnswered ? "active:scale-[0.98]" : ""}
                   `}
                 >
-                  <span>{option}</span>
-                  {showFeedback && isCorrectOption && (
-                    <CheckCircle2 className="w-5 h-5 text-green-600" />
-                  )}
-                  {showFeedback && isSelected && !currentItem.isCorrect && (
-                    <XCircle className="w-5 h-5 text-red-600" />
-                  )}
+                  <span className="text-foreground font-medium">{option}</span>
+                  {circleContent}
                 </button>
               )
             })}
           </div>
 
-          {/* Next button */}
-          {hasAnswered && (
+          {/* Next button and back link */}
+          <div className="pb-8">
             <button
               onClick={handleNext}
-              className="mt-6 w-full bg-foreground text-background py-4 rounded-full font-medium text-lg flex items-center justify-center gap-2 transition-all active:scale-[0.98] touch-manipulation animate-in fade-in slide-in-from-bottom-2 duration-300"
+              disabled={!hasAnswered}
+              className={`
+                w-full py-4 rounded-full font-medium text-base
+                transition-all touch-manipulation
+                ${hasAnswered 
+                  ? "bg-foreground text-background active:scale-[0.98]" 
+                  : "bg-muted text-muted-foreground cursor-not-allowed"
+                }
+              `}
             >
-              {currentIndex < items.length - 1 ? "Siguiente" : "Ver resultados"}
-              <ArrowRight className="w-5 h-5" />
+              Siguiente
             </button>
-          )}
+            
+            <button
+              onClick={() => {
+                if (currentIndex > 0) {
+                  setCurrentIndex(prev => prev - 1)
+                } else {
+                  setScreen("intro")
+                }
+              }}
+              className="w-full py-3 text-sm text-muted-foreground hover:text-foreground transition-colors touch-manipulation"
+            >
+              Volver atrás
+            </button>
+          </div>
         </div>
       </div>
     )

@@ -24,6 +24,8 @@ import { useVladiStore, type MoodEntry } from "@/lib/vladi-store"
 import type { QuadrantId } from "@/lib/vladi-data"
 import { supabase } from "@/lib/supabase/client"
 import { IEQPanel } from "./ieq-panel"
+import { IEToolsPanel } from "./ie-tools-panel"
+import { PonleNombreTool } from "./ponle-nombre-tool"
 import { LocationPermissionPrompt } from "./location-permission-prompt"
 import { handleError } from "@/lib/error-handler"
 
@@ -51,7 +53,7 @@ interface VladiAppProps {
 export default function VladiApp({ userId, userProfile: initialUserProfile }: VladiAppProps) {
   const [activeTab, setActiveTab] = useState("vladi")
   const [currentScreen, setCurrentScreen] = useState<
-    "main" | "emotion" | "context" | "mirror" | "vladi-chat" | "notifications" | "personas"
+    "main" | "emotion" | "context" | "mirror" | "vladi-chat" | "notifications" | "personas" | "ie-tools" | "ponle-nombre"
   >("main")
   const [selectedQuadrant, setSelectedQuadrant] = useState<QuadrantId>("green")
   const [emotionData, setEmotionData] = useState<EmotionData | null>(null)
@@ -86,6 +88,7 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
   const userName = userProfile?.display_name || userProfile?.username || "Usuario"
   const [showLocationPrompt, setShowLocationPrompt] = useState(true)
   const [showInitialQuiz, setShowInitialQuiz] = useState(false)
+  const [ponleNombreMode, setPonleNombreMode] = useState<"training" | "assessment">("training")
   const [initialQuizCompleted, setInitialQuizCompleted] = useState<boolean | null>(null)
 
   const handleNotificationsClick = useCallback(() => {
@@ -520,13 +523,14 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
         )
       case "home":
         return (
-          <HomeView
-            userId={userId}
-            userProfile={profileForViews}
-            onAvatarClick={handleOpenProfile}
-            onNotificationsClick={handleNotificationsClick}
-            onPersonasClick={handleOpenGroupsPeople}
-          />
+<HomeView
+                userId={userId}
+                userProfile={profileForViews}
+                onAvatarClick={handleOpenProfile}
+                onNotificationsClick={handleNotificationsClick}
+                onPersonasClick={handleOpenGroupsPeople}
+                onIEToolsClick={() => setCurrentScreen("ie-tools")}
+              />
         )
       case "stats":
         return (
@@ -613,6 +617,28 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
           onClose={handleCloseVladiChat}
           emotionalContext={vladiChatContext || undefined}
           conversationSummary={conversationSummary}
+        />
+      )}
+
+      {currentScreen === "ie-tools" && (
+        <IEToolsPanel
+          userName={userName}
+          onBack={() => setCurrentScreen("main")}
+          onStartTool={(toolId, mode) => {
+            if (toolId === "ponle-nombre") {
+              setPonleNombreMode(mode)
+              setCurrentScreen("ponle-nombre")
+            }
+          }}
+        />
+      )}
+
+      {currentScreen === "ponle-nombre" && userId && (
+        <PonleNombreTool
+          userId={userId}
+          mode={ponleNombreMode}
+          onClose={() => setCurrentScreen("ie-tools")}
+          onComplete={() => setCurrentScreen("ie-tools")}
         />
       )}
 

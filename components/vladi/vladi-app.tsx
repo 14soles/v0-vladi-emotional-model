@@ -24,8 +24,6 @@ import { useVladiStore, type MoodEntry } from "@/lib/vladi-store"
 import type { QuadrantId } from "@/lib/vladi-data"
 import { supabase } from "@/lib/supabase/client"
 import { IEQPanel } from "./ieq-panel"
-import { IEToolsPanel } from "./ie-tools-panel"
-import { PonleNombreTool } from "./ponle-nombre-tool"
 import { LocationPermissionPrompt } from "./location-permission-prompt"
 import { handleError } from "@/lib/error-handler"
 
@@ -53,7 +51,7 @@ interface VladiAppProps {
 export default function VladiApp({ userId, userProfile: initialUserProfile }: VladiAppProps) {
   const [activeTab, setActiveTab] = useState("vladi")
   const [currentScreen, setCurrentScreen] = useState<
-    "main" | "emotion" | "context" | "mirror" | "vladi-chat" | "notifications" | "personas" | "ie-tools" | "ponle-nombre"
+    "main" | "emotion" | "context" | "mirror" | "vladi-chat" | "notifications" | "personas"
   >("main")
   const [selectedQuadrant, setSelectedQuadrant] = useState<QuadrantId>("green")
   const [emotionData, setEmotionData] = useState<EmotionData | null>(null)
@@ -88,7 +86,6 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
   const userName = userProfile?.display_name || userProfile?.username || "Usuario"
   const [showLocationPrompt, setShowLocationPrompt] = useState(true)
   const [showInitialQuiz, setShowInitialQuiz] = useState(false)
-  const [ponleNombreMode, setPonleNombreMode] = useState<"training" | "assessment">("training")
   const [initialQuizCompleted, setInitialQuizCompleted] = useState<boolean | null>(null)
 
   const handleNotificationsClick = useCallback(() => {
@@ -391,13 +388,6 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
       return
     }
     
-    // If clicking vladi tab, go to IE tools panel
-    if (tab === "vladi") {
-      setActiveTab(tab)
-      setCurrentScreen("ie-tools")
-      return
-    }
-    
     setCurrentScreen("main")
     setActiveTab(tab)
   }, [initialQuizCompleted, showInitialQuiz])
@@ -530,13 +520,13 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
         )
       case "home":
         return (
-<HomeView
-                userId={userId}
-                userProfile={profileForViews}
-                onAvatarClick={handleOpenProfile}
-                onNotificationsClick={handleNotificationsClick}
-                onPersonasClick={handleOpenGroupsPeople}
-              />
+          <HomeView
+            userId={userId}
+            userProfile={profileForViews}
+            onAvatarClick={handleOpenProfile}
+            onNotificationsClick={handleNotificationsClick}
+            onPersonasClick={handleOpenGroupsPeople}
+          />
         )
       case "stats":
         return (
@@ -577,7 +567,7 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
     <div className="relative h-[100dvh] flex flex-col bg-white overflow-hidden">
       <div className="flex-1 flex flex-col overflow-hidden min-h-0">{renderMainView()}</div>
 
-      {(currentScreen === "main" || currentScreen === "ie-tools") && !showInitialQuiz && (
+      {currentScreen === "main" && !showInitialQuiz && (
         <BottomNavbar activeTab={activeTab} onTabChange={handleTabChange} userProfile={userProfile} />
       )}
 
@@ -623,28 +613,6 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
           onClose={handleCloseVladiChat}
           emotionalContext={vladiChatContext || undefined}
           conversationSummary={conversationSummary}
-        />
-      )}
-
-      {currentScreen === "ie-tools" && (
-        <IEToolsPanel
-          userName={userName}
-          onBack={() => setCurrentScreen("main")}
-          onStartTool={(toolId, mode) => {
-            if (toolId === "ponle-nombre") {
-              setPonleNombreMode(mode)
-              setCurrentScreen("ponle-nombre")
-            }
-          }}
-        />
-      )}
-
-      {currentScreen === "ponle-nombre" && userId && (
-        <PonleNombreTool
-          userId={userId}
-          mode={ponleNombreMode}
-          onClose={() => setCurrentScreen("ie-tools")}
-          onComplete={() => setCurrentScreen("ie-tools")}
         />
       )}
 

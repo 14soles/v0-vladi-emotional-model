@@ -391,6 +391,13 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
       return
     }
     
+    // If clicking vladi tab, go to IE tools panel
+    if (tab === "vladi") {
+      setActiveTab(tab)
+      setCurrentScreen("ie-tools")
+      return
+    }
+    
     setCurrentScreen("main")
     setActiveTab(tab)
   }, [initialQuizCompleted, showInitialQuiz])
@@ -529,7 +536,6 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
                 onAvatarClick={handleOpenProfile}
                 onNotificationsClick={handleNotificationsClick}
                 onPersonasClick={handleOpenGroupsPeople}
-                onIEToolsClick={() => setCurrentScreen("ie-tools")}
               />
         )
       case "stats":
@@ -571,7 +577,7 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
     <div className="relative h-[100dvh] flex flex-col bg-white overflow-hidden">
       <div className="flex-1 flex flex-col overflow-hidden min-h-0">{renderMainView()}</div>
 
-      {currentScreen === "main" && !showInitialQuiz && (
+      {(currentScreen === "main" || currentScreen === "ie-tools") && !showInitialQuiz && (
         <BottomNavbar activeTab={activeTab} onTabChange={handleTabChange} userProfile={userProfile} />
       )}
 

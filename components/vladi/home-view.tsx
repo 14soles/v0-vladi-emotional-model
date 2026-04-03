@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { User, Brain } from "lucide-react"
+import { User } from "lucide-react"
 import { SocialFeed } from "./social-feed"
 import { CommonHeader } from "./common-header"
 import { supabase } from "@/lib/supabase/client"
@@ -17,7 +17,6 @@ interface HomeViewProps {
   onNotificationsClick?: () => void
   onPersonasClick?: () => void
   onRadarClick?: () => void
-  onIEToolsClick?: () => void
 }
 
 interface Group {
@@ -26,7 +25,7 @@ interface Group {
   is_system: boolean
 }
 
-export function HomeView({ userId, userProfile, onAvatarClick, onNotificationsClick, onPersonasClick, onRadarClick, onIEToolsClick }: HomeViewProps) {
+export function HomeView({ userId, userProfile, onAvatarClick, onNotificationsClick, onPersonasClick, onRadarClick }: HomeViewProps) {
   const [selectedGroup, setSelectedGroup] = useState<string>("todos")
   const [groups, setGroups] = useState<Group[]>([])
   const [notificationCount, setNotificationCount] = useState(0)
@@ -165,17 +164,6 @@ export function HomeView({ userId, userProfile, onAvatarClick, onNotificationsCl
             >
               <User className="w-4 h-4" />
             </button>
-
-            {onIEToolsClick && (
-              <button
-                onClick={onIEToolsClick}
-                className="p-2 rounded-full bg-teal-500 text-white hover:bg-teal-600 transition-colors flex-shrink-0 ml-1"
-                aria-label="Panel IE - Herramientas"
-                type="button"
-              >
-                <Brain className="w-4 h-4" />
-              </button>
-            )}
           </div>
         </div>
 

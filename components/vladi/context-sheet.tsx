@@ -330,69 +330,7 @@ export function ContextSheet({ emotionData, onClose, onPublish, userId }: Contex
             </button>
           </div>
 
-          {/* Selected context chips - shows what's been filled */}
-          {(selectedTags.size > 0 || activityText || companyText || timeReference || bodySignals.size > 0) && (
-            <div className="w-full flex flex-wrap justify-center gap-2 mt-3 px-2 shrink-0">
-              {Array.from(selectedTags).map((tag) => (
-                <div
-                  key={tag}
-                  className="bg-gray-100 px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs sm:text-sm text-gray-700 font-medium"
-                >
-                  {tag}
-                  <button
-                    onClick={() => toggleTag(tag)}
-                    className="text-gray-400 hover:text-gray-600 touch-manipulation"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ))}
-              {activityText && !selectedTags.has(activityText) && (
-                <div className="bg-gray-100 px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs sm:text-sm text-gray-700 font-medium">
-                  {activityText}
-                  <button
-                    onClick={() => setActivityText("")}
-                    className="text-gray-400 hover:text-gray-600 touch-manipulation"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              )}
-              {companyText && (
-                <div className="bg-gray-100 px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs sm:text-sm text-gray-700 font-medium">
-                  {companyText}
-                  <button
-                    onClick={() => setCompanyText("")}
-                    className="text-gray-400 hover:text-gray-600 touch-manipulation"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              )}
-              {timeReference && (
-                <div className="bg-gray-100 px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs sm:text-sm text-gray-700 font-medium">
-                  {timeReference}
-                  <button
-                    onClick={() => setTimeReference("")}
-                    className="text-gray-400 hover:text-gray-600 touch-manipulation"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              )}
-              {bodySignals.size > 0 && (
-                <div className="bg-gray-100 px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs sm:text-sm text-gray-700 font-medium">
-                  {Array.from(bodySignals).join(", ")}
-                  <button
-                    onClick={() => setBodySignals(new Set())}
-                    className="text-gray-400 hover:text-gray-600 touch-manipulation"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+
 
           {/* Input area - compact, auto-grows, no scroll jump */}
           <div className="w-full relative mt-2 mb-4">

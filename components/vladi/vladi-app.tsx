@@ -24,6 +24,7 @@ import { useVladiStore, type MoodEntry } from "@/lib/vladi-store"
 import type { QuadrantId } from "@/lib/vladi-data"
 import { supabase } from "@/lib/supabase/client"
 import { IEQPanel } from "./ieq-panel"
+import { VladiToolsView } from "./vladi-tools-view"
 import { LocationPermissionPrompt } from "./location-permission-prompt"
 import { handleError } from "@/lib/error-handler"
 
@@ -509,10 +510,9 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
         )
       case "vladi":
         return (
-          <RecordView
-            onStartCheckIn={handleStartCheckIn}
-            userName={userName}
-            userProfile={userProfile}
+          <VladiToolsView
+            userId={userId}
+            userProfile={profileForViews}
             onAvatarClick={handleOpenProfile}
             onNotificationsClick={handleNotificationsClick}
             notificationCount={notificationCount}

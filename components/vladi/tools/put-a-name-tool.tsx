@@ -73,27 +73,36 @@ export function PutANameTool({
     questionStartTimeRef.current = Date.now()
   }, [mode])
 
-  // Handle option selection
+  // Handle option selection - allows changing selection
   const handleSelectOption = useCallback((optionIndex: number) => {
-    if (items[currentIndex].selectedIndex !== null) return // Already answered
-
-    const responseTime = Date.now() - questionStartTimeRef.current
-    const isCorrect = optionIndex === items[currentIndex].correctIndex
-
     setItems(prev => {
       const updated = [...prev]
       updated[currentIndex] = {
         ...updated[currentIndex],
         selectedIndex: optionIndex,
+        // We calculate isCorrect when moving to next, not on selection
+      }
+      return updated
+    })
+  }, [currentIndex])
+
+  // Handle next question - calculates correctness and saves response time
+  const handleNext = useCallback(() => {
+    const responseTime = Date.now() - questionStartTimeRef.current
+    const currentSelectedIndex = items[currentIndex].selectedIndex
+    const isCorrect = currentSelectedIndex === items[currentIndex].correctIndex
+
+    // Save the response time and correctness for current item
+    setItems(prev => {
+      const updated = [...prev]
+      updated[currentIndex] = {
+        ...updated[currentIndex],
         isCorrect,
         responseTimeMs: responseTime,
       }
       return updated
     })
-  }, [currentIndex, items])
 
-  // Handle next question
-  const handleNext = useCallback(() => {
     if (currentIndex < items.length - 1) {
       setCurrentIndex(prev => prev + 1)
       questionStartTimeRef.current = Date.now()
@@ -111,7 +120,7 @@ export function PutANameTool({
       // Session complete
       setScreen("result")
     }
-  }, [currentIndex, items.length])
+  }, [currentIndex, items])
 
   // Calculate results
   const calculateResults = useCallback((): SessionResults => {
@@ -272,8 +281,7 @@ export function PutANameTool({
 
   // Question screen
   if (screen === "question" && currentItem) {
-    const hasAnswered = currentItem.selectedIndex !== null
-    const showFeedback = mode === "training" && hasAnswered
+    const hasSelected = currentItem.selectedIndex !== null
 
     return (
       <div className="fixed inset-0 bg-background z-[60] flex flex-col overflow-hidden">
@@ -315,64 +323,33 @@ export function PutANameTool({
             </p>
           </div>
 
-          {/* Options - pill style with selection circles */}
+          {/* Options - pill style with selection circles (NO feedback, just black selection) */}
           <div className="flex flex-col gap-3 py-6 flex-shrink-0">
             {currentItem.shuffledOptions.map((option, index) => {
               const isSelected = currentItem.selectedIndex === index
-              const isCorrectOption = index === currentItem.correctIndex
-              
-              // Determine border and circle styles
-              let borderStyle = "border-muted"
-              let circleContent = (
-                <div className="w-7 h-7 rounded-full border-2 border-muted flex-shrink-0" />
-              )
-              
-              if (hasAnswered && showFeedback) {
-                if (isCorrectOption) {
-                  borderStyle = "border-green-500"
-                  circleContent = (
-                    <div className="w-7 h-7 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
-                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                  )
-                } else if (isSelected && !currentItem.isCorrect) {
-                  borderStyle = "border-red-500"
-                  circleContent = (
-                    <div className="w-7 h-7 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0">
-                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </div>
-                  )
-                }
-              } else if (isSelected) {
-                borderStyle = "border-foreground"
-                circleContent = (
-                  <div className="w-7 h-7 rounded-full bg-foreground flex items-center justify-center flex-shrink-0">
-                    <svg className="w-4 h-4 text-background" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                )
-              }
 
               return (
                 <button
                   key={index}
                   onClick={() => handleSelectOption(index)}
-                  disabled={hasAnswered}
                   className={`
                     w-full py-4 px-5 rounded-full bg-background border-2 text-left
                     transition-all duration-200 touch-manipulation
                     flex items-center justify-between gap-3
-                    ${borderStyle}
-                    ${!hasAnswered ? "active:scale-[0.98]" : ""}
+                    active:scale-[0.98]
+                    ${isSelected ? "border-foreground" : "border-muted"}
                   `}
                 >
                   <span className="text-foreground">{option}</span>
-                  {circleContent}
+                  {isSelected ? (
+                    <div className="w-7 h-7 rounded-full bg-foreground flex items-center justify-center flex-shrink-0">
+                      <svg className="w-4 h-4 text-background" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  ) : (
+                    <div className="w-7 h-7 rounded-full border-2 border-muted flex-shrink-0" />
+                  )}
                 </button>
               )
             })}
@@ -382,11 +359,11 @@ export function PutANameTool({
           <div className="pb-10 flex-shrink-0">
             <button
               onClick={handleNext}
-              disabled={!hasAnswered}
+              disabled={!hasSelected}
               className={`
                 w-full py-4 rounded-full font-medium text-base
                 transition-all touch-manipulation
-                ${hasAnswered 
+                ${hasSelected 
                   ? "bg-foreground text-background active:scale-[0.98]" 
                   : "bg-muted text-muted-foreground cursor-not-allowed"
                 }

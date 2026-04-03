@@ -1,10 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { X, Brain, Play, MessageCircle } from "lucide-react"
+import { X, Brain } from "lucide-react"
 import type { EmotionData } from "./emotion-screen"
-import { type InterventionType, INTERVENTIONS } from "@/lib/types/telemetry"
-import { getTopIntervention, emotionDataToState, getEmotionFamily } from "@/lib/intervention-recommender"
 
 interface MirrorOverlayProps {
   emotionData: EmotionData
@@ -13,30 +11,14 @@ interface MirrorOverlayProps {
   bodySignals?: string[]
   timeReference?: string
   certainty?: string
+  company?: string
+  photoUrl?: string
   onClose: () => void
-  onStartChat?: () => void
-  onStartIntervention?: (interventionType: InterventionType, linkedEmotion: LinkedEmotionContext) => void
-}
-
-// Context of the emotion linked to an intervention
-export interface LinkedEmotionContext {
-  emotion: string
-  emotionFamily: string
-  intensity: number
-  wellbeing: number
-  timestamp: string
-}
-
-interface ActivitySuggestion {
-  title: string
-  type: string
-  time: string
-  interventionType?: InterventionType
 }
 
 interface MirrorResult {
   text: string
-  suggestion?: ActivitySuggestion
+  generatedImageUrl?: string
 }
 
 export function MirrorOverlay({
@@ -46,29 +28,24 @@ export function MirrorOverlay({
   bodySignals,
   timeReference,
   certainty,
+  company,
+  photoUrl,
   onClose,
-  onStartChat,
-  onStartIntervention,
 }: MirrorOverlayProps) {
   const [loading, setLoading] = useState(true)
+  const [imageLoading, setImageLoading] = useState(true)
   const [result, setResult] = useState<MirrorResult | null>(null)
 
   useEffect(() => {
     const generateMirror = async () => {
       try {
-        const emotionFamilyMap: Record<string, string> = {
-          green: "en calma",
-          yellow: "con energía",
-          red: "en tensión",
-          blue: "sin ánimo",
-        }
-
         const activityTags = contextTags.filter(
           (t) => !t.startsWith("Compañía:") && !t.startsWith("Actividad:") && !t.startsWith("Con:"),
         )
         const companyTags = contextTags.filter((t) => t.startsWith("Con:")).map((t) => t.replace("Con:", "").trim())
 
-        const [mirrorResponse, suggestionResponse] = await Promise.all([
+        // Generate mirror text and image in parallel
+        const [mirrorResponse, imageResponse] = await Promise.all([
           fetch("/api/ai/emotional-mirror", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -86,67 +63,40 @@ export function MirrorOverlay({
               },
             }),
           }),
-          fetch("/api/ai/activity-suggestion", {
+          fetch("/api/ai/generate-emotion-image", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               emotion: emotionData.emotion,
-              intensity: emotionData.energy,
-              wellbeing: emotionData.pleasantness,
-              emotionFamily: emotionFamilyMap[emotionData.quadrant] || "desconocido",
+              quadrant: emotionData.quadrant,
+              company: company || companyTags.join(", "),
+              bodySignals,
+              timeReference,
+              contextText,
+              photoUrl,
             }),
           }),
         ])
 
         const mirrorData = await mirrorResponse.json()
-
-        // Use the intelligent recommendation engine based on valence/arousal/intensity
-        const emotionState = emotionDataToState({
-          emotion: emotionData.emotion,
-          quadrant: emotionData.quadrant,
-          energy: emotionData.energy,
-          pleasantness: emotionData.pleasantness,
-          intensity: emotionData.intensity, // Self-reported intensity (1-10)
-        })
-        
-        const recommendedIntervention = getTopIntervention(emotionState)
+        const imageData = await imageResponse.json()
 
         setResult({
           text: mirrorData.text,
-          suggestion: {
-            title: recommendedIntervention.name,
-            type: "DEAM EQ",
-            time: `${Math.floor(recommendedIntervention.duration_seconds / 60)} min`,
-            interventionType: recommendedIntervention.type,
-          },
+          generatedImageUrl: imageData.success ? imageData.imageUrl : undefined,
         })
       } catch {
-        // Fallback if mirror generation fails - still use smart recommendation
-        const emotionState = emotionDataToState({
-          emotion: emotionData.emotion,
-          quadrant: emotionData.quadrant,
-          energy: emotionData.energy,
-          pleasantness: emotionData.pleasantness,
-          intensity: emotionData.intensity,
-        })
-        const recommendedIntervention = getTopIntervention(emotionState)
-        
         setResult({
           text: "Gracias por compartir tus emociones. Tu registro me ayuda a comprenderte mejor.",
-          suggestion: {
-            title: recommendedIntervention.name,
-            type: "DEAM EQ",
-            time: `${Math.floor(recommendedIntervention.duration_seconds / 60)} min`,
-            interventionType: recommendedIntervention.type,
-          },
         })
       } finally {
         setLoading(false)
+        setImageLoading(false)
       }
     }
 
     generateMirror()
-  }, [emotionData, contextText, contextTags, bodySignals, timeReference, certainty])
+  }, [emotionData, contextText, contextTags, bodySignals, timeReference, certainty, company, photoUrl])
 
   return (
     <div
@@ -173,60 +123,33 @@ export function MirrorOverlay({
         </div>
       ) : (
         <div className="max-w-[400px] w-full flex flex-col items-center animate-in fade-in slide-in-from-bottom-2 duration-500">
-          <div className="w-16 h-16 sm:w-20 sm:h-20 bg-black text-white rounded-full flex items-center justify-center mb-4 sm:mb-6">
-            <Brain className="w-10 h-10 sm:w-12 sm:h-12" />
-          </div>
+          {/* Generated emotion image or brain icon fallback */}
+          {result?.generatedImageUrl ? (
+            <div className="w-48 h-48 sm:w-56 sm:h-56 rounded-3xl overflow-hidden mb-6 shadow-lg">
+              <img 
+                src={result.generatedImageUrl} 
+                alt="Tu momento emocional" 
+                className="w-full h-full object-cover"
+              />
+            </div>
+          ) : imageLoading ? (
+            <div className="w-48 h-48 sm:w-56 sm:h-56 rounded-3xl bg-gray-100 mb-6 flex items-center justify-center">
+              <div className="flex flex-col items-center">
+                <div className="w-12 h-12 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin mb-2" />
+                <p className="text-xs text-gray-400">Generando imagen...</p>
+              </div>
+            </div>
+          ) : (
+            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-black text-white rounded-full flex items-center justify-center mb-4 sm:mb-6">
+              <Brain className="w-10 h-10 sm:w-12 sm:h-12" />
+            </div>
+          )}
 
           <h2 className="text-xl sm:text-2xl font-medium text-gray-900 mb-4 sm:mb-6 leading-snug">
             ¡Gracias por compartir tus emociones!
           </h2>
 
-          <p className="text-sm sm:text-base text-gray-600 leading-relaxed mb-6 sm:mb-8 px-2">{result?.text}</p>
-
-          {result?.suggestion && (
-            <button 
-              onClick={() => {
-                if (result.suggestion?.interventionType && onStartIntervention) {
-                  onStartIntervention(result.suggestion.interventionType, {
-                    emotion: emotionData.emotion,
-                    emotionFamily: getEmotionFamily(emotionData.emotion, emotionData.quadrant),
-                    intensity: emotionData.intensity, // Self-reported intensity (1-10)
-                    wellbeing: emotionData.pleasantness,
-                    timestamp: new Date().toISOString(),
-                  })
-                }
-              }}
-              className="bg-gray-100 border border-gray-200 rounded-full py-3 px-5 w-full max-w-xs flex items-center justify-between mb-4 hover:bg-gray-200 transition-colors active:scale-[0.98] touch-manipulation"
-            >
-              <div className="flex flex-col items-start text-left">
-                <span className="text-[9px] sm:text-[10px] uppercase text-gray-500 font-semibold tracking-wider mb-0.5">
-                  Sugerencia - {result.suggestion.type}
-                </span>
-                <div className="flex items-center gap-2 font-bold text-gray-900 text-sm sm:text-base">
-                  <Play className="w-4 h-4" />
-                  <span>{result.suggestion.title}</span>
-                </div>
-              </div>
-              <span className="text-xs sm:text-sm text-gray-500">{result.suggestion.time}</span>
-            </button>
-          )}
-
-          {onStartChat && (
-            <button
-              onClick={onStartChat}
-              className="bg-black text-white rounded-full py-3 px-6 w-full max-w-xs flex items-center justify-center gap-2 mb-6 sm:mb-8 hover:bg-gray-800 transition-colors active:scale-[0.98] touch-manipulation font-medium"
-            >
-              <MessageCircle className="w-4 h-4" />
-              <span>Iniciar Chat con Vladi</span>
-            </button>
-          )}
-
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 font-medium transition-colors touch-manipulation py-2"
-          >
-            Cerrar
-          </button>
+          <p className="text-sm sm:text-base text-gray-600 leading-relaxed px-2">{result?.text}</p>
         </div>
       )}
     </div>

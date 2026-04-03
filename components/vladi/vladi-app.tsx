@@ -5,7 +5,7 @@ import { BottomNavbar } from "./bottom-navbar"
 import { RecordView } from "./record-view"
 import { EmotionScreen, type EmotionData } from "./emotion-screen"
 import { ContextSheet } from "./context-sheet"
-import { MirrorOverlay, type LinkedEmotionContext } from "./mirror-overlay"
+import { MirrorOverlay } from "./mirror-overlay"
 import { InterventionRunner } from "./intervention-runner"
 import { INTERVENTIONS, type InterventionType } from "@/lib/types/telemetry"
 import { QUADRANT_STATES } from "@/lib/vladi-data"
@@ -27,6 +27,15 @@ import { IEQPanel } from "./ieq-panel"
 import { LocationPermissionPrompt } from "./location-permission-prompt"
 import { handleError } from "@/lib/error-handler"
 
+// Context of the emotion linked to an intervention
+interface LinkedEmotionContext {
+  emotion: string
+  emotionFamily: string
+  intensity: number
+  wellbeing: number
+  timestamp: string
+}
+
 interface VladiAppProps {
   userId?: string
   userProfile?: {
@@ -46,7 +55,15 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
   >("main")
   const [selectedQuadrant, setSelectedQuadrant] = useState<QuadrantId>("green")
   const [emotionData, setEmotionData] = useState<EmotionData | null>(null)
-  const [contextData, setContextData] = useState<{ text: string; tags: string[] } | null>(null)
+  const [contextData, setContextData] = useState<{ 
+    text: string
+    tags: string[]
+    bodySignals?: string[]
+    timeReference?: string
+    certainty?: string
+    company?: string
+    photoUrl?: string
+  } | null>(null)
   const [showProfile, setShowProfile] = useState(false)
   const [notificationCount, setNotificationCount] = useState(0)
   // Mutable profile state that can be refreshed after edits
@@ -169,6 +186,7 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
       bodySignals?: string[],
       timeReference?: string,
       certainty?: string,
+      photoUrl?: string,
     ) => {
       if (!emotionData) return
 
@@ -249,7 +267,19 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
         }
       }
 
-      setContextData({ text, tags })
+      // Extract company from tags
+      const companyTag = tags.find((t) => t.startsWith("Compañía:"))?.replace("Compañía: ", "") || 
+                         tags.find((t) => t.startsWith("Con:"))?.replace("Con:", "").trim()
+      
+      setContextData({ 
+        text, 
+        tags, 
+        bodySignals, 
+        timeReference, 
+        certainty,
+        company: companyTag,
+        photoUrl,
+      })
       setCurrentScreen("mirror")
     },
     [emotionData, addEntry, userId],
@@ -261,25 +291,9 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
     setContextData(null)
   }, [])
 
-  const handleStartChatFromMirror = useCallback(() => {
-    if (emotionData && contextData) {
-      setVladiChatContext({
-        emotion: emotionData.emotion,
-        intensity: emotionData.energy,
-        wellbeing: emotionData.pleasantness,
-        notes: contextData.text,
-        contextTags: contextData.tags,
-      })
-    }
-    setCurrentScreen("vladi-chat")
-  }, [emotionData, contextData])
 
-  // Handle starting an intervention from the mirror overlay
-  const handleStartInterventionFromMirror = useCallback((interventionType: InterventionType, linkedEmotion: LinkedEmotionContext) => {
-    setActiveIntervention({ type: interventionType, linkedEmotion })
-    // Close the mirror but keep emotion data
-    setCurrentScreen("main")
-  }, [])
+
+
 
   // Handle completing an intervention
   const handleCompleteIntervention = useCallback(async (intensityAfter: number, perceivedUtility: number) => {
@@ -575,9 +589,12 @@ export default function VladiApp({ userId, userProfile: initialUserProfile }: Vl
           emotionData={emotionData}
           contextText={contextData.text}
           contextTags={contextData.tags}
+          bodySignals={contextData.bodySignals}
+          timeReference={contextData.timeReference}
+          certainty={contextData.certainty}
+          company={contextData.company}
+          photoUrl={contextData.photoUrl}
           onClose={handleCloseMirror}
-          onStartChat={handleStartChatFromMirror}
-          onStartIntervention={handleStartInterventionFromMirror}
         />
       )}
 

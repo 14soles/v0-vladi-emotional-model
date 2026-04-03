@@ -1,4 +1,6 @@
-import { generateText } from "ai"
+import { GoogleGenAI } from "@google/genai"
+
+const genAI = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY })
 
 export async function POST(req: Request) {
   try {
@@ -56,26 +58,23 @@ The image should be calming, introspective, and suitable for a wellness/emotiona
 No text in the image. Simple, elegant composition with plenty of white space.
 Square format, centered composition.`
 
-    // Use Gemini's multimodal model that can generate images via AI Gateway
-    const result = await generateText({
-      model: "google/gemini-3.1-flash-image-preview",
-      providerOptions: {
-        google: {
-          responseModalities: ["image", "text"],
-        },
+    // Use Gemini's image generation model directly
+    const response = await genAI.models.generateContent({
+      model: "gemini-2.0-flash-exp-image-generation",
+      contents: prompt,
+      config: {
+        responseModalities: ["image", "text"],
       },
-      prompt,
     })
 
-    // Extract image from response files
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const files = (result as any).files
-    const imageFile = files?.[0]
+    // Extract image from response
+    const parts = response.candidates?.[0]?.content?.parts
+    const imagePart = parts?.find((part) => part.inlineData?.mimeType?.startsWith("image/"))
     
-    if (imageFile && imageFile.base64) {
+    if (imagePart?.inlineData) {
       return Response.json({ 
         success: true,
-        imageUrl: `data:${imageFile.mimeType || "image/png"};base64,${imageFile.base64}`,
+        imageUrl: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`,
       })
     }
 

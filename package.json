@@ -12,6 +12,7 @@
     "@ai-sdk/react": "3.0.3",
     "@ai-sdk/rsc": "2.0.3",
     "@emotion/is-prop-valid": "latest",
+    "@google/genai": "^1.48.0",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "1.2.2",
     "@radix-ui/react-alert-dialog": "1.1.4",

@@ -58,12 +58,12 @@ The image should be calming, introspective, and suitable for a wellness/emotiona
 No text in the image. Simple, elegant composition with plenty of white space.
 Square format, centered composition.`
 
-    // Use Gemini's image generation model directly
+    // Use Gemini's multimodal model with image generation capability
     const response = await genAI.models.generateContent({
-      model: "gemini-2.0-flash-exp-image-generation",
+      model: "gemini-2.0-flash-exp",
       contents: prompt,
       config: {
-        responseModalities: ["image", "text"],
+        responseModalities: ["IMAGE", "TEXT"],
       },
     })
 

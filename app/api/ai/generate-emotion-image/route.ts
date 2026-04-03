@@ -50,31 +50,30 @@ export async function POST(req: Request) {
       sceneElements.push(`scene reflecting: ${contextText.substring(0, 100)}`)
     }
 
-    const prompt = `Generate an artistic illustration representing the emotion "${emotion}". 
+    const prompt = `Artistic minimalist illustration representing the emotion "${emotion}". 
 Style: Modern, clean line art with ${colorPalette}. 
 Atmosphere: ${timeOfDay}.
 Scene elements: ${sceneElements.length > 0 ? sceneElements.join(", ") : "abstract emotional representation"}.
-The image should be calming, introspective, and suitable for a wellness/emotional tracking app.
-No text in the image. Simple, elegant composition with plenty of white space.
-Square format, centered composition.`
+Calming, introspective, wellness app style.
+No text. Simple, elegant composition with white space.`
 
-    // Use Gemini's multimodal model with image generation capability
-    const response = await genAI.models.generateContent({
-      model: "gemini-2.0-flash-exp",
-      contents: prompt,
+    // Use Imagen 3 for image generation
+    const response = await genAI.models.generateImages({
+      model: "imagen-3.0-generate-002",
+      prompt,
       config: {
-        responseModalities: ["IMAGE", "TEXT"],
+        numberOfImages: 1,
+        aspectRatio: "1:1",
       },
     })
 
     // Extract image from response
-    const parts = response.candidates?.[0]?.content?.parts
-    const imagePart = parts?.find((part) => part.inlineData?.mimeType?.startsWith("image/"))
+    const image = response.generatedImages?.[0]
     
-    if (imagePart?.inlineData) {
+    if (image?.image?.imageBytes) {
       return Response.json({ 
         success: true,
-        imageUrl: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`,
+        imageUrl: `data:image/png;base64,${image.image.imageBytes}`,
       })
     }
 

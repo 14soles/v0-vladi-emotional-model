@@ -276,19 +276,11 @@ export function PutANameTool({
     const showFeedback = mode === "training" && hasAnswered
 
     return (
-      <div className="fixed inset-0 bg-background z-50 flex flex-col">
-        {/* Header - matches Vladi app style */}
-        <div className="flex items-center justify-between px-4 py-3">
-          {/* Logo */}
-          <div className="flex items-center gap-1.5">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2L15 8L22 9L17 14L18 21L12 18L6 21L7 14L2 9L9 8L12 2Z" fill="#EF4444"/>
-              <path d="M12 6L13.5 9L17 9.5L14.5 12L15 15.5L12 14L9 15.5L9.5 12L7 9.5L10.5 9L12 6Z" fill="#22C55E"/>
-              <path d="M12 8L12.75 9.5L14.5 9.75L13.25 11L13.5 12.75L12 12L10.5 12.75L10.75 11L9.5 9.75L11.25 9.5L12 8Z" fill="#3B82F6"/>
-              <path d="M12 9L12.375 9.75L13.25 9.875L12.625 10.5L12.75 11.375L12 11L11.25 11.375L11.375 10.5L10.75 9.875L11.625 9.75L12 9Z" fill="#FBBF24"/>
-            </svg>
-            <span className="text-base font-semibold text-foreground">Vladi</span>
-          </div>
+      <div className="fixed inset-0 bg-background z-[60] flex flex-col overflow-hidden">
+        {/* Header - simple text style */}
+        <div className="flex items-center justify-between px-4 py-4 flex-shrink-0">
+          {/* Activity name */}
+          <span className="text-base font-medium text-foreground">Ponle Nombre</span>
           
           {/* Progress indicator */}
           <div className="text-sm font-medium text-foreground">
@@ -305,7 +297,7 @@ export function PutANameTool({
         </div>
 
         {/* Progress bar */}
-        <div className="px-4 pt-2 pb-8">
+        <div className="px-4 pb-6 flex-shrink-0">
           <div className="h-1 bg-muted rounded-full overflow-hidden">
             <div 
               className="h-full bg-foreground transition-all duration-300"
@@ -315,31 +307,31 @@ export function PutANameTool({
         </div>
 
         {/* Question content */}
-        <div className="flex-1 flex flex-col px-6">
-          {/* Prompt text - centered and clean */}
-          <div className="flex-1 flex items-start justify-center pt-8">
-            <p className="text-foreground text-center text-lg leading-relaxed max-w-sm">
+        <div className="flex-1 flex flex-col px-6 min-h-0">
+          {/* Prompt text - centered */}
+          <div className="flex-1 flex items-center justify-center">
+            <p className="text-foreground text-center text-lg leading-relaxed max-w-xs">
               {currentItem.item.prompt}
             </p>
           </div>
 
           {/* Options - pill style with selection circles */}
-          <div className="flex flex-col gap-3 pb-6">
+          <div className="flex flex-col gap-3 py-6 flex-shrink-0">
             {currentItem.shuffledOptions.map((option, index) => {
               const isSelected = currentItem.selectedIndex === index
               const isCorrectOption = index === currentItem.correctIndex
               
-              // Determine circle and border styles
+              // Determine border and circle styles
               let borderStyle = "border-muted"
               let circleContent = (
-                <div className="w-6 h-6 rounded-full border-2 border-muted" />
+                <div className="w-7 h-7 rounded-full border-2 border-muted flex-shrink-0" />
               )
               
               if (hasAnswered && showFeedback) {
                 if (isCorrectOption) {
                   borderStyle = "border-green-500"
                   circleContent = (
-                    <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                    <div className="w-7 h-7 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
                       <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                       </svg>
@@ -348,7 +340,7 @@ export function PutANameTool({
                 } else if (isSelected && !currentItem.isCorrect) {
                   borderStyle = "border-red-500"
                   circleContent = (
-                    <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center">
+                    <div className="w-7 h-7 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0">
                       <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                       </svg>
@@ -358,7 +350,7 @@ export function PutANameTool({
               } else if (isSelected) {
                 borderStyle = "border-foreground"
                 circleContent = (
-                  <div className="w-6 h-6 rounded-full bg-foreground flex items-center justify-center">
+                  <div className="w-7 h-7 rounded-full bg-foreground flex items-center justify-center flex-shrink-0">
                     <svg className="w-4 h-4 text-background" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                     </svg>
@@ -374,12 +366,12 @@ export function PutANameTool({
                   className={`
                     w-full py-4 px-5 rounded-full bg-background border-2 text-left
                     transition-all duration-200 touch-manipulation
-                    flex items-center justify-between
+                    flex items-center justify-between gap-3
                     ${borderStyle}
                     ${!hasAnswered ? "active:scale-[0.98]" : ""}
                   `}
                 >
-                  <span className="text-foreground font-medium">{option}</span>
+                  <span className="text-foreground">{option}</span>
                   {circleContent}
                 </button>
               )
@@ -387,7 +379,7 @@ export function PutANameTool({
           </div>
 
           {/* Next button and back link */}
-          <div className="pb-8">
+          <div className="pb-10 flex-shrink-0">
             <button
               onClick={handleNext}
               disabled={!hasAnswered}
